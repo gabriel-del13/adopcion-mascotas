@@ -1,0 +1,10 @@
+[
+  { "ParameterKey": "Proyecto",            "ParameterValue": "adopcion-mascotas" },
+  { "ParameterKey": "Entorno",             "ParameterValue": "prod" },
+  { "ParameterKey": "EmailAlertas",        "ParameterValue": "CAMBIAR@ejemplo.com" },
+  { "ParameterKey": "PresupuestoMensualUSD", "ParameterValue": "25" },
+  { "ParameterKey": "UsarDominioPropio",   "ParameterValue": "true" },
+  { "ParameterKey": "DominioRaiz",         "ParameterValue": "PENDIENTE-DE-COMPRAR" },
+  { "ParameterKey": "CertificadoArn",      "ParameterValue": "PENDIENTE-stack-edge-us-east-1" },
+  { "ParameterKey": "WebAclArn",           "ParameterValue": "PENDIENTE-stack-edge-us-east-1" }
+]
