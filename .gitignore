@@ -22,6 +22,7 @@ dist-ssr/
 !.env.example
 *.pem
 *.key
+.dev-docs
 
 # ---- AWS / despliegue ----
 # Plantillas empaquetadas que genera `aws cloudformation package`.

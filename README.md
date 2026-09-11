@@ -81,7 +81,7 @@ Proyecto en construcción. Progreso de la infraestructura:
 - [ ] Fase 0 — Bootstrap de la cuenta y bucket de artefactos
 - [x] Fase 1 — Repositorio y estructura
 - [ ] Fase 2 — `budgets.yaml`
-- [ ] Fase 3 — `database.yaml`, `storage.yaml`, `auth.yaml`, `ecr.yaml`
+- [ ] Fase 3 — `database.yaml`, `storage.yaml`, `auth.yaml`
 - [ ] Fase 4 — `compute-api.yaml`
 - [ ] Fase 5 — `async.yaml`
 - [ ] Fase 6 — `cdn-dns.yaml`
