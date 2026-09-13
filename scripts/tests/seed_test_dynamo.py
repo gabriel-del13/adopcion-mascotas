@@ -1,3 +1,14 @@
+"""Crea las tablas de DynamoDB Local y las llena con datos de prueba.
+
+Uso:
+    docker compose up -d
+    python scripts/seed.py
+
+Es idempotente: los identificadores de los datos de prueba son fijos, así
+que volver a ejecutarlo sustituye los mismos ítems en vez de duplicarlos.
+Los nombres de tabla y el endpoint salen de variables de entorno, con los
+valores por defecto del entorno local.
+"""
 import os
 import sys
 
@@ -25,7 +36,9 @@ def recurso_dynamo():
 
 
 def crear_tabla_catalogo(client):
-
+    """Datos publicables: guarderías y animales. Streams activados (los
+    consume el regenerador de catálogo, fuera del alcance del MVP), sin TTL.
+    """
     client.create_table(
         TableName=TABLA_CATALOGO,
         BillingMode="PAY_PER_REQUEST",
@@ -69,7 +82,9 @@ def crear_tabla_catalogo(client):
 
 
 def crear_tabla_solicitudes(client):
-
+    """Datos personales: clientes y solicitudes. Streams desactivados,
+    TTL de 12 meses sobre las solicitudes.
+    """
     client.create_table(
         TableName=TABLA_SOLICITUDES,
         BillingMode="PAY_PER_REQUEST",
