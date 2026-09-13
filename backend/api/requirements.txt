@@ -1,1 +1,2 @@
 pydantic[email]==2.*
+boto3==1.35.*
