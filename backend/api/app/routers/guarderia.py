@@ -21,6 +21,8 @@ class AnimalEntrada(BaseModel):
     nombre: str = Field(min_length=1)
     tipo: TipoAnimal
     edad: EdadAnimal
+    ciudad: str = Field(min_length=1)
+    provincia: str = Field(min_length=1)
     descripcion: str = Field(min_length=1)
     # MVP: URLs de ejemplo. En producción son presignadas hacia S3
     fotos: list[str] = Field(default_factory=list, max_length=5)
