@@ -58,6 +58,12 @@ def obtener_animal(animal_id: str) -> Animal | None:
     return Animal.model_validate(items[0]) if items else None
 
 
+def obtener_guarderia(sub: str) -> Guarderia | None:
+    respuesta = dynamo.tabla_catalogo.get_item(Key={"PK": f"GUARDERIA#{sub}", "SK": "METADATA"})
+    item = respuesta.get("Item")
+    return Guarderia.model_validate(item) if item else None
+
+
 def listar_guarderias_aprobadas() -> list[Guarderia]:
     """
     # MVP: en producción esto lo sirve el catálogo JSON precalculado, no un Scan directo a la tabla en cada petición pública.
