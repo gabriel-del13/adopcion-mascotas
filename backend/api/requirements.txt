@@ -1,4 +1,5 @@
 pydantic[email]==2.*
 boto3==1.35.*
 fastapi==0.115.*
-uvicorn[standard]==0.32.*
+mangum==0.19.*
+python-multipart==0.0.*

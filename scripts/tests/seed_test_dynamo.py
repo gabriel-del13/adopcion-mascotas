@@ -1,13 +1,19 @@
 """Crea las tablas de DynamoDB Local y las llena con datos de prueba.
 
-Uso:
+Uso local:
     docker compose up -d
-    python scripts/seed.py
+    python scripts/tests/seed_test_dynamo.py
+
+También sirve para poner datos de humo en las tablas reales de un entorno de
+AWS ya desplegado (infra/templates/dynamodb.yaml), pasando USAR_AWS_REAL=1
+para que no fuerce ni el endpoint local ni credenciales dummy:
+
+    USAR_AWS_REAL=1 TABLA_CATALOGO=adopcion-mascotas-dev-catalogo \\
+      TABLA_SOLICITUDES=adopcion-mascotas-dev-solicitudes \\
+      python scripts/tests/seed_test_dynamo.py
 
 Es idempotente: los identificadores de los datos de prueba son fijos, así
 que volver a ejecutarlo sustituye los mismos ítems en vez de duplicarlos.
-Los nombres de tabla y el endpoint salen de variables de entorno, con los
-valores por defecto del entorno local.
 """
 import os
 import sys
@@ -15,12 +21,17 @@ import sys
 import boto3
 from botocore.exceptions import ClientError
 
-# Credenciales dummy: DynamoDB Local no las valida, pero el SDK de boto3 pide que existan para construir el cliente.
-os.environ.setdefault("AWS_ACCESS_KEY_ID", "local")
-os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "local")
+USAR_AWS_REAL = os.environ.get("USAR_AWS_REAL") == "1"
+
+if not USAR_AWS_REAL:
+    # Credenciales dummy: DynamoDB Local no las valida, pero el SDK de boto3
+    # pide que existan para construir el cliente. No se fijan contra AWS real
+    # porque pisarían credenciales de verdad ya configuradas en el entorno.
+    os.environ.setdefault("AWS_ACCESS_KEY_ID", "local")
+    os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "local")
 
 REGION = os.environ.get("AWS_REGION", "eu-west-1")
-ENDPOINT_URL = os.environ.get("DYNAMODB_ENDPOINT_URL", "http://localhost:8000")
+ENDPOINT_URL = None if USAR_AWS_REAL else os.environ.get("DYNAMODB_ENDPOINT_URL", "http://localhost:8000")
 TABLA_CATALOGO = os.environ.get("TABLA_CATALOGO", "adopcion-mascotas-local-catalogo")
 TABLA_SOLICITUDES = os.environ.get("TABLA_SOLICITUDES", "adopcion-mascotas-local-solicitudes")
 
@@ -37,7 +48,7 @@ def recurso_dynamo():
 
 def crear_tabla_catalogo(client):
     """Datos publicables: guarderías y animales. Streams activados (los
-    consume el regenerador de catálogo, fuera del alcance del MVP), sin TTL.
+    consume el regenerador de catálogo, todavía no construido), sin TTL.
     """
     client.create_table(
         TableName=TABLA_CATALOGO,
@@ -179,7 +190,7 @@ def animal(id_animal, guarderia_sub, nombre, tipo, edad, estado, ciudad, provinc
         "ciudad": ciudad,
         "provincia": provincia,
         "descripcion": descripcion,
-        # MVP: URLs de ejemplo. En producción son presignadas hacia S3 (la carpeta de thumbs)
+        # Fase pendiente: URLs de ejemplo. En producción son presignadas hacia S3 (la carpeta de thumbs)
         "fotos": [f"https://ejemplo.com/fotos/{id_animal}-1.jpg"],
         "fechaPublicacion": "2026-01-15",
         "GSI1PK": f"ESTADO#{estado}",
