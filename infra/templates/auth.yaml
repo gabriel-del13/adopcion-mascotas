@@ -2,7 +2,8 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Cognito User Pool: grupos ADMIN/GUARDERIA/CLIENTE, tres App Clients (uno por
   camino de registro/login) y el trigger de Post Confirmation que asigna
-  grupo y crea el ítem correspondiente en DynamoDB.
+  grupo y crea el ítem correspondiente en DynamoDB. Depende de dynamodb.yaml
+  (importa los nombres y ARN de las tablas).
 
 Parameters:
   Proyecto:
@@ -46,6 +47,10 @@ Resources:
                     Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-arn"
                   - !ImportValue
                     Fn::Sub: "${Proyecto}-${Entorno}-tabla-solicitudes-arn"
+              # No se puede usar !GetAtt UserPool.Arn aquí: crearía un ciclo,
+              # porque el propio User Pool depende de esta función a través de
+              # LambdaConfig.PostConfirmation. Se acota por cuenta y región en
+              # su lugar; en esta cuenta solo existe este User Pool.
               - Effect: Allow
                 Action:
                   - cognito-idp:AdminAddUserToGroup
@@ -73,6 +78,12 @@ Resources:
             Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-nombre"
           TABLA_SOLICITUDES: !ImportValue
             Fn::Sub: "${Proyecto}-${Entorno}-tabla-solicitudes-nombre"
+          # No lleva los IDs de App Client como variables de entorno: un !Ref
+          # a UserPoolClientCliente/Guarderia aquí crearía un ciclo (esos
+          # clientes dependen del User Pool, que depende de esta función). En
+          # su lugar, el handler llama a DescribeUserPoolClient en tiempo de
+          # ejecución con el clientId que trae el propio evento y compara
+          # ClientName. Ver backend/event_lambdas/post_confirmation/handler.py.
 
   LogGroupPostConfirmation:
     Type: AWS::Logs::LogGroup
@@ -134,6 +145,10 @@ Resources:
       GroupName: CLIENTE
       Description: Asignado por el trigger de Post Confirmation cuando el registro entra por el App Client de clientes.
 
+  # Dos App Clients para que el trigger distinga cliente de guardería por
+  # event.callerContext.clientId (que pone Cognito, no el navegador). Un
+  # tercero solo para el login del panel de administración: el ADMIN no se
+  # auto-registra, así que este cliente no dispara nada en el trigger.
   UserPoolClientCliente:
     Type: AWS::Cognito::UserPoolClient
     Properties:

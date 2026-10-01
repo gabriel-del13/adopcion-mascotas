@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Despliega notificaciones.yaml (cola SQS + DLQ + SES + Lambda consumidora),
-# apuntando al zip que dejó build-lambdas.sh en el bucket de artefactos.
+# apuntando al zip que dejó build-lambdas.sh en el bucket de artefactos. FALTA build-lambdas.sh
 #
 # Uso: ./infra/scripts/deploy-notificaciones.sh <dev|prod>
 set -euo pipefail
