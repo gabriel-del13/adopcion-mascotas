@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Gestión de Identidades con Amazon Cognito (RefugioCloud).
+
+Resources:
+  # 1. Directorio de Usuarios
+  RefugioUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: RefugioUsers
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+
+  # 2. Cliente de Aplicación (Configurado para el frontend React/Vite)
+  RefugioUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: RefugioReactApp
+      UserPoolId: !Ref RefugioUserPool
+      GenerateSecret: false # IMPORTANTE: Siempre false para Single Page Applications (SPA)
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+
+  # 3. Grupo de Permisos: Adoptante
+  GrupoAdoptantes:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Adoptante
+      Description: "Usuarios que buscan adoptar un animal"
+      Precedence: 2
+      UserPoolId: !Ref RefugioUserPool
+
+  # 4. Grupo de Permisos: Protectora
+  GrupoProtectoras:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Protectora
+      Description: "Administradores del refugio con privilegios de escritura"
+      Precedence: 1
+      UserPoolId: !Ref RefugioUserPool
+
+Outputs:
+  Region:
+    Description: Región donde se ha desplegado Cognito
+    Value: !Ref AWS::Region
+  UserPoolId:
+    Description: ID del Directorio de Usuarios
+    Value: !Ref RefugioUserPool
+  UserPoolClientId:
+    Description: ID del Cliente de Aplicación para React
+    Value: !Ref RefugioUserPoolClient
