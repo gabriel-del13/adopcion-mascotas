@@ -83,6 +83,9 @@ def listar_solicitudes_por_guarderia(guarderia_id: str) -> list[Solicitud]:
 
 
 def eliminar_solicitudes_de_cliente(sub: str) -> None:
+    """Parte del borrado de cuenta: TTL de 12 meses aparte, al borrar la
+    cuenta se borran ya
+    """
     for solicitud in listar_solicitudes_por_cliente(sub):
         dynamo.tabla_solicitudes.delete_item(
             Key={"PK": f"ANIMAL#{solicitud.animalId}", "SK": f"SOLICITUD#{solicitud.fecha.isoformat()}"}
@@ -90,7 +93,7 @@ def eliminar_solicitudes_de_cliente(sub: str) -> None:
 
 
 class SolicitudYaProcesadaError(Exception):
-    """"""
+    """La solicitud ya no está en PENDIENTE: alguien se adelantó."""
 
 
 def obtener_solicitud(animal_id: str, fecha_iso: str) -> Solicitud | None:
@@ -100,6 +103,9 @@ def obtener_solicitud(animal_id: str, fecha_iso: str) -> Solicitud | None:
 
 
 def aceptar_solicitud(animal_id: str, fecha_iso: str) -> None:
+    """Atómico: si dos personas la aceptaran a la vez, la segunda falla en vez
+    de pisar silenciosamente a la primera.
+    """
     try:
         dynamo.tabla_solicitudes.update_item(
             Key={"PK": f"ANIMAL#{animal_id}", "SK": f"SOLICITUD#{fecha_iso}"},
@@ -114,6 +120,7 @@ def aceptar_solicitud(animal_id: str, fecha_iso: str) -> None:
 
 
 def rechazar_solicitud_anonima(animal_id: str, fecha_iso: str) -> None:
+    """Se borra el ítem entero: no queda ningún dato de contacto"""
     try:
         dynamo.tabla_solicitudes.delete_item(
             Key={"PK": f"ANIMAL#{animal_id}", "SK": f"SOLICITUD#{fecha_iso}"},
@@ -127,6 +134,9 @@ def rechazar_solicitud_anonima(animal_id: str, fecha_iso: str) -> None:
 
 
 def redactar_solicitud_cliente(animal_id: str, fecha_iso: str) -> None:
+    """Se conservan clienteId/estado/fecha para el historial del cliente; se
+    borran los datos de contacto porque ya no hacen falta y son personales.
+    """
     try:
         dynamo.tabla_solicitudes.update_item(
             Key={"PK": f"ANIMAL#{animal_id}", "SK": f"SOLICITUD#{fecha_iso}"},

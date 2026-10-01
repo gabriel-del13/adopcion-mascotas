@@ -47,6 +47,12 @@ def listar_animales(
 
 
 def obtener_animal(animal_id: str) -> Animal | None:
+    """Ficha de animal a partir de solo el id.
+
+    # Fase pendiente: la PK real es GUARDERIA#<sub>, así que hoy esto es un
+    Scan. La fase del catálogo JSON precalculado elimina la necesidad de esta
+    consulta en el camino público
+    """
     respuesta = dynamo.tabla_catalogo.scan(
         FilterExpression=Attr("SK").begins_with("ANIMAL#") & Attr("id").eq(animal_id)
     )
@@ -61,6 +67,11 @@ def obtener_guarderia(sub: str) -> Guarderia | None:
 
 
 def listar_guarderias_aprobadas() -> list[Guarderia]:
+    """
+    # Fase pendiente: en producción esto lo sirve el catálogo JSON precalculado
+    (DynamoDB Streams + Lambda regeneradora), no un Scan directo en cada
+    petición pública. Esa fase todavía no está construida.
+    """
     respuesta = dynamo.tabla_catalogo.scan(
         FilterExpression=Attr("SK").eq("METADATA") & Attr("estado").eq(EstadoGuarderia.aprobada.value)
     )
@@ -68,6 +79,7 @@ def listar_guarderias_aprobadas() -> list[Guarderia]:
 
 
 def listar_guarderias_pendientes() -> list[Guarderia]:
+    """Panel del admin: usa el índice disperso, no un Scan."""
     respuesta = dynamo.tabla_catalogo.query(
         IndexName="GSI-Guarderias-Pendientes",
         KeyConditionExpression=Key("GSI2PK").eq("PENDIENTE"),
@@ -95,6 +107,7 @@ def rechazar_guarderia(sub: str, motivo: str) -> None:
 
 
 def crear_guarderia(guarderia: Guarderia) -> None:
+    """La crea el trigger de Post Confirmation de Cognito al registrarse, no la API."""
     item = guarderia.model_dump(mode="json", exclude_none=True)
     item["PK"] = f"GUARDERIA#{guarderia.sub}"
     item["SK"] = "METADATA"
@@ -105,6 +118,10 @@ def crear_guarderia(guarderia: Guarderia) -> None:
 
 
 def actualizar_perfil_guarderia(sub: str, nombre: str, telefono: str, ciudad: str, provincia: str, descripcion: str) -> None:
+    """Solo los campos de perfil: la guardería no puede tocar su propio
+    `estado` por aquí (sería auto-aprobarse), así que se actualiza con SET
+    explícito en vez de reemplazar el ítem entero.
+    """
     dynamo.tabla_catalogo.update_item(
         Key={"PK": f"GUARDERIA#{sub}", "SK": "METADATA"},
         UpdateExpression="SET nombre = :nombre, telefono = :telefono, ciudad = :ciudad, provincia = :provincia, descripcion = :descripcion",
@@ -119,12 +136,18 @@ def actualizar_perfil_guarderia(sub: str, nombre: str, telefono: str, ciudad: st
 
 
 def obtener_animal_de_guarderia(guarderia_id: str, animal_id: str) -> Animal | None:
+    """A diferencia de obtener_animal (Scan público), aquí ya se conoce la PK
+    real porque viene de la URL de un endpoint de guardería.
+    """
     respuesta = dynamo.tabla_catalogo.get_item(Key={"PK": f"GUARDERIA#{guarderia_id}", "SK": f"ANIMAL#{animal_id}"})
     item = respuesta.get("Item")
     return Animal.model_validate(item) if item else None
 
 
 def actualizar_animal(animal: Animal) -> None:
+    """Reemplaza el ítem completo: el llamador ya cargó el animal existente
+    con obtener_animal_de_guarderia y aplicó los cambios sobre ese modelo.
+    """
     dynamo.tabla_catalogo.put_item(Item=_animal_a_item(animal))
 
 
@@ -133,6 +156,10 @@ def eliminar_animal(guarderia_id: str, animal_id: str) -> None:
 
 
 def marcar_estado_animal(guarderia_id: str, animal_id: str, estado: EstadoAnimal) -> None:
+    """Solo estado + GSI1PK: GSI1SK no cambia porque depende de tipo/edad, que
+    esto no toca. Se usa al aceptar una solicitud (-> en_proceso); el resto de
+    cambios de estado van por el PUT general de animal (actualizar_animal).
+    """
     dynamo.tabla_catalogo.update_item(
         Key={"PK": f"GUARDERIA#{guarderia_id}", "SK": f"ANIMAL#{animal_id}"},
         UpdateExpression="SET estado = :estado, GSI1PK = :gsi1pk",
@@ -141,6 +168,7 @@ def marcar_estado_animal(guarderia_id: str, animal_id: str, estado: EstadoAnimal
 
 
 def incrementar_contador_rechazos(guarderia_id: str, animal_id: str) -> None:
+    """Lo único que sobrevive de una solicitud anónima rechazada."""
     dynamo.tabla_catalogo.update_item(
         Key={"PK": f"GUARDERIA#{guarderia_id}", "SK": f"ANIMAL#{animal_id}"},
         UpdateExpression="ADD contadorRechazosAnonimos :uno",
