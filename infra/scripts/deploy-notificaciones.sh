@@ -1,3 +1,7 @@
+#!/usr/bin/env bash
+# Despliega notificaciones.yaml (cola SQS + DLQ + SES + Lambda consumidora)
+#
+# Uso: ./infra/scripts/deploy-notificaciones.sh <dev|prod>
 set -euo pipefail
 
 ENTORNO="${1:-}"

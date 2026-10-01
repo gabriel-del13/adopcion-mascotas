@@ -1,7 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  Cola SQS (con DLQ) entre la API y el envío de correo, la Lambda consumidora
-  que envía por SES, y las alarmas operativas asociadas. 
+  Cola SQS (con DLQ) entre la API y el envío de correo
 
 Parameters:
   Proyecto:
@@ -113,6 +112,15 @@ Resources:
               - Effect: Allow
                 Action: [sqs:ReceiveMessage, sqs:DeleteMessage, sqs:GetQueueAttributes]
                 Resource: !GetAtt ColaNotificaciones.Arn
+              # SES comprueba el permiso IAM sobre TODAS las identidades que
+              # intervienen en el envío, no solo el remitente: si el
+              # destinatario también es una identidad verificada de esta
+              # cuenta, el resource-level check también se aplica sobre él. 
+              # El email de cada guardería es dato de la aplicación, 
+              # no se conoce al desplegar, así que no
+              # se puede acotar a una identidad concreta como con el
+              # remitente — de ahí el comodín, limitado a esta cuenta/región
+              # y a estas dos acciones.
               - Effect: Allow
                 Action: [ses:SendEmail, ses:SendRawEmail]
                 Resource: !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
