@@ -1,3 +1,8 @@
+"""Aprobación de guarderías por el administrador.
+
+JWT + grupo ADMIN. El grupo ADMIN no es alcanzable por auto-registro solo lo asigna
+`admin-add-user-to-group` con credenciales administrativas.
+"""
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -31,4 +36,6 @@ def rechazar_guarderia(sub: str, entrada: RechazoEntrada, _: str = Depends(requi
     if guarderia is None:
         raise HTTPException(status_code=404, detail="Guardería no encontrada")
     repo.rechazar_guarderia(sub, entrada.motivo)
-    # Fase pendiente
+    # Fase pendiente: aquí va el aviso por correo a la guardería (SQS → SES),
+    # cuando exista esa infraestructura. Por ahora la decisión queda en la
+    # tabla y el admin la comunica fuera de banda.
