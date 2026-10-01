@@ -5,7 +5,9 @@ Description: >
   thumbnails (imagen de contenedor, Pillow) disparada por el evento de
   subida. Depende de dynamodb.yaml (ARN de la tabla catalogo) y de
   artefactos.yaml (URI de la imagen ya subida a ECR: el repositorio vive ahí,
-  no aquí, para evitar repetición — ver artefactos.yaml).
+  no aquí, para evitar repetición — ver artefactos.yaml). Nada de
+  api.yaml: es quien importa de aquí (permisos S3 de RolGuarderia), así que
+  la dependencia inversa crearía un ciclo.
 
 Parameters:
   Proyecto:
@@ -70,6 +72,8 @@ Resources:
         Variables:
           BUCKET_FOTOS_DERIVADAS: !Sub "${Proyecto}-${Entorno}-fotos-derivadas-${AWS::AccountId}"
           TABLA_CATALOGO: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-nombre" }
+      # Sin ReservedConcurrentExecutions: mismo límite de cuenta de 10
+      # ejecuciones concurrentes ya documentado en api.yaml y catalogo.yaml.
 
   LogGroupThumbnails:
     Type: AWS::Logs::LogGroup

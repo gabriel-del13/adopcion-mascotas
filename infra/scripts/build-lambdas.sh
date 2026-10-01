@@ -1,3 +1,16 @@
+#!/usr/bin/env bash
+# Empaqueta backend/api y los event_lambdas (post_confirmation,
+# regenerador_catalogo, consumidora_sqs) en zips listos para Lambda, y los
+# sube al bucket de artefactos del entorno.
+#
+# Uso: ./infra/scripts/build-lambdas.sh <dev|prod>
+#
+# Las cinco Lambdas de la API comparten este mismo zip (solo cambia el
+# Handler en api.yaml). El zip se construye con las dependencias de Linux
+# ARM64 aunque se empaquete desde Windows: pip normalmente instala los
+# wheels de la máquina donde corre, así que hace falta pedir explícitamente
+# la plataforma de destino (--platform/--only-binary), o el zip tendría
+# binarios de Windows que Lambda no puede cargar.
 set -euo pipefail
 
 ENTORNO="${1:-}"
@@ -42,16 +55,19 @@ python -m pip install \
 cp -r "$DIR_RAIZ/backend/api/app" "$API_BUILD/app"
 python "$DIR_RAIZ/infra/scripts/zip_dir.py" "$API_BUILD" "$BUILD_DIR/api.zip"
 
+echo "Empaquetando backend/event_lambdas/post_confirmation (solo boto3, ya está en el runtime de Lambda)..."
 PC_BUILD="$BUILD_DIR/post_confirmation"
 mkdir -p "$PC_BUILD"
 cp "$DIR_RAIZ/backend/event_lambdas/post_confirmation/handler.py" "$PC_BUILD/handler.py"
 python "$DIR_RAIZ/infra/scripts/zip_dir.py" "$PC_BUILD" "$BUILD_DIR/post-confirmation.zip"
 
+echo "Empaquetando backend/event_lambdas/regenerador_catalogo (solo boto3)..."
 RC_BUILD="$BUILD_DIR/regenerador_catalogo"
 mkdir -p "$RC_BUILD"
 cp "$DIR_RAIZ/backend/event_lambdas/regenerador_catalogo/handler.py" "$RC_BUILD/handler.py"
 python "$DIR_RAIZ/infra/scripts/zip_dir.py" "$RC_BUILD" "$BUILD_DIR/regenerador-catalogo.zip"
 
+echo "Empaquetando backend/event_lambdas/consumidora_sqs (solo boto3)..."
 CS_BUILD="$BUILD_DIR/consumidora_sqs"
 mkdir -p "$CS_BUILD"
 cp "$DIR_RAIZ/backend/event_lambdas/consumidora_sqs/handler.py" "$CS_BUILD/handler.py"
@@ -63,3 +79,4 @@ aws s3 cp "$BUILD_DIR/post-confirmation.zip" "s3://$BUCKET/lambdas/post-confirma
 aws s3 cp "$BUILD_DIR/regenerador-catalogo.zip" "s3://$BUCKET/lambdas/regenerador-catalogo.zip"
 aws s3 cp "$BUILD_DIR/consumidor-notificaciones.zip" "s3://$BUCKET/lambdas/consumidor-notificaciones.zip"
 
+echo "Listo. CodigoS3Bucket=$BUCKET CodigoS3KeyApi=lambdas/api.zip CodigoS3KeyPostConfirmation=lambdas/post-confirmation.zip CodigoS3KeyRegenerador=lambdas/regenerador-catalogo.zip CodigoS3KeyConsumidora=lambdas/consumidor-notificaciones.zip"

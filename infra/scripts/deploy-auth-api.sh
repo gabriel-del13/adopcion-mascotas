@@ -1,3 +1,13 @@
+#!/usr/bin/env bash
+# Despliega auth.yaml y luego api.yaml, apuntando al zip que dejó
+# build-lambdas.sh en el bucket de artefactos.
+#
+# Requisitos previos, en orden: deploy-all.sh <entorno> (crea dynamodb y el
+# bucket de artefactos), build-lambdas.sh <entorno> (sube los zips) y
+# deploy-notificaciones.sh <entorno> (api.yaml importa su cola y su tema de
+# alertas).
+#
+# Uso: ./infra/scripts/deploy-auth-api.sh <dev|prod>
 set -euo pipefail
 
 ENTORNO="${1:-}"
@@ -52,6 +62,10 @@ aws cloudformation deploy \
     CodigoS3Bucket="$BUCKET" \
     CodigoS3KeyApi="lambdas/api.zip"
 
+# CloudFormation no vuelve a subir el código si el S3Key no cambió, aunque el
+# objeto en S3 sea distinto: solo compara la cadena "S3Bucket/S3Key" contra el
+# estado anterior, no el contenido. Como estos scripts siempre usan la misma
+# key fija, hay que forzar la actualización de código a mano tras cada deploy.
 echo "Forzando actualización de código (CloudFormation no lo hace si el S3Key no cambia)..."
 aws lambda update-function-code \
   --function-name "${PROYECTO}-${ENTORNO}-post-confirmation" \

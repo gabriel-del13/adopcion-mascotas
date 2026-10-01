@@ -1,6 +1,10 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  Cola SQS (con DLQ) entre la API y el envío de correo
+  Cola SQS (con DLQ) entre la API y el envío de correo, la Lambda consumidora
+  que envía por SES, y las alarmas operativas asociadas. Depende solo de
+  dynamodb.yaml — nada de api.yaml, a propósito: api.yaml importa la cola de
+  aquí, así que la dependencia en el otro sentido crearía un ciclo entre
+  stacks.
 
 Parameters:
   Proyecto:
@@ -83,6 +87,10 @@ Resources:
       AlarmActions:
         - !Ref TemaAlertasOperativas
 
+  # La alarma de "token inválido" no va aquí: depende del log group de
+  # FnDecision, que crea api.yaml, desplegado *después* de este stack (ver
+  # Description). Vive en api.yaml, importando TemaAlertasOperativasArn.
+
   # ---------------------------------------------------------------------
   # SES: identidad de remitente. Requiere verificación manual
   # ---------------------------------------------------------------------
@@ -143,6 +151,8 @@ Resources:
       Environment:
         Variables:
           EMAIL_REMITENTE: !Ref EmailRemitenteSes
+      # Sin ReservedConcurrentExecutions: mismo límite de cuenta de 10
+      # ejecuciones concurrentes documentado en api.yaml
 
   LogGroupConsumidoraNotificaciones:
     Type: AWS::Logs::LogGroup

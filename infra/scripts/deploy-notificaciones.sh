@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Despliega notificaciones.yaml (cola SQS + DLQ + SES + Lambda consumidora),
-# apuntando al zip que dejó build-lambdas.sh en el bucket de artefactos. FALTA build-lambdas.sh
+# apuntando al zip que dejó build-lambdas.sh en el bucket de artefactos.
+#
+# Requisitos previos, en orden: deploy-all.sh <entorno> (crea dynamodb) y
+# build-lambdas.sh <entorno> (sube el zip). Debe desplegarse ANTES que
+# deploy-auth-api.sh: api.yaml importa la cola y el tema de alertas de aquí.
 #
 # Uso: ./infra/scripts/deploy-notificaciones.sh <dev|prod>
 set -euo pipefail

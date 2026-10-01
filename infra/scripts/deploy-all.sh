@@ -1,3 +1,12 @@
+#!/usr/bin/env bash
+# Despliega la infraestructura del proyecto en el entorno indicado.
+#
+# Uso: ./infra/scripts/deploy-all.sh <dev|prod>
+#
+# Cada plantilla se despliega suelta, con parámetros inline
+# (infra/parameters/README.md: los stacks sueltos no usan file://). Los
+# valores comunes se leen del fichero de parámetros del entorno para no
+# duplicarlos a mano en la línea de comandos.
 set -euo pipefail
 
 ENTORNO="${1:-}"

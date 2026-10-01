@@ -5,7 +5,8 @@
 #
 # Requisitos previos, en orden: deploy-all.sh <entorno> (crea dynamodb y el
 # repositorio ECR en artefactos.yaml) y build-thumbnails-image.sh <entorno>
-# (sube la imagen).
+# (sube la imagen). Debe desplegarse ANTES que deploy-auth-api.sh: api.yaml
+# importa los dos buckets de aquí para los permisos de RolGuarderia.
 #
 # Uso: ./infra/scripts/deploy-fotos.sh <dev|prod>
 set -euo pipefail
