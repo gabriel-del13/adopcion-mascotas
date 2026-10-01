@@ -477,8 +477,8 @@ function setMode(mode){
 }
 
 function updateAuthFields(){
-  // Ocultamos/mostramos bloques según el modo en el que estemos
-  document.getElementById('wrapper-login-pass').hidden = (authMode !== 'login');
+  // Mostramos el campo de contraseña tanto al acceder como al registrarse
+  document.getElementById('wrapper-login-pass').hidden = (authMode !== 'login' && authMode !== 'register');
   document.getElementById('fields-register').hidden = (authMode !== 'register');
   document.getElementById('fields-verify').hidden = (authMode !== 'verify');
   document.getElementById('fields-reset').hidden = (authMode !== 'reset');
