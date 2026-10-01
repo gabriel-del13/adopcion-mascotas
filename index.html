@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Huellas Encontradas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Karla:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/amazon-cognito-identity-js@6.3.7/dist/amazon-cognito-identity.min.js"></script>
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#EDE6D4; --surface:#FAF6EC; --ink:#2A2318; --ink-muted:#6E6250;
+  --rust:#A6512B; --rust-dark:#8B4324; --pine:#435840; --mustard:#B4791F; --line:#D9CCAF;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#20190f; --surface:#2b2116; --ink:#f1e7d6; --ink-muted:#c7b89c;
+    --rust:#e08355; --rust-dark:#c96a3d; --pine:#89b17f; --mustard:#e0a94a; --line:#4a3f2c;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#20190f; --surface:#2b2116; --ink:#f1e7d6; --ink-muted:#c7b89c;
+  --rust:#e08355; --rust-dark:#c96a3d; --pine:#89b17f; --mustard:#e0a94a; --line:#4a3f2c;
+}
+*,*::before,*::after{box-sizing:inherit;}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Karla',system-ui,sans-serif;line-height:1.5;}
+h1,h2,h3{font-family:'Fraunces',Georgia,serif;font-weight:600;margin:0 0 .4em;line-height:1.15;}
+p{margin:0 0 1em;color:var(--ink-muted);}
+a{color:var(--rust);}
+button,input,select,textarea{font-family:inherit;font-size:1rem;color:var(--ink);}
+.icon-defs{display:none;}
+.wrap{max-width:1080px;margin:0 auto;padding:0 1.5rem;}
+
+/* Nav */
+.nav{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--line);z-index:10;padding-top:env(safe-area-inset-top,0px);}
+.nav-inner{max-width:1080px;margin:0 auto;padding:.9rem 1.5rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;}
+.brand{display:flex;align-items:center;gap:.5rem;background:none;border:none;cursor:pointer;font-family:'Fraunces',serif;font-weight:700;font-size:1.15rem;color:var(--ink);padding:0;}
+.brand svg{width:26px;height:26px;color:var(--rust);}
+.nav-links{display:flex;gap:.5rem;align-items:center;}
+.nav-links button{background:none;border:1px solid transparent;border-radius:6px;padding:.5rem .9rem;cursor:pointer;color:var(--ink);}
+.nav-links button:hover{border-color:var(--line);}
+#nav-auth{border:1px solid var(--rust);color:var(--rust);}
+
+/* Buttons */
+.btn{border-radius:7px;padding:.7rem 1.3rem;border:1.5px solid transparent;cursor:pointer;font-weight:700;}
+.btn-primary{background:var(--rust);color:#fff;}
+.btn-primary:hover{background:var(--rust-dark);}
+.btn-outline{background:none;border-color:var(--ink);color:var(--ink);}
+.btn-outline:hover{background:var(--surface);}
+.btn-block{width:100%;margin-top:.8rem;}
+.btn-link{background:none;border:none;color:var(--rust);cursor:pointer;font-weight:700;padding:1.5rem 0 0;}
+.btn-small{background:none;border:1px solid var(--line);border-radius:6px;padding:.35rem .7rem;cursor:pointer;font-size:.85rem;}
+:focus-visible{outline:2px solid var(--rust);outline-offset:2px;}
+
+/* Views */
+.view{padding:2rem 0 4rem;}
+main{max-width:1080px;margin:0 auto;padding:0 1.5rem;}
+
+/* Hero */
+.hero{display:grid;grid-template-columns:1.3fr 1fr;gap:2.5rem;align-items:center;padding:2rem 0 3rem;}
+.hero h1{font-size:2.6rem;max-width:14ch;}
+.hero .lead{max-width:42ch;font-size:1.05rem;}
+.hero-actions{display:flex;gap:.8rem;flex-wrap:wrap;margin-top:1rem;}
+.hero-art{color:var(--rust);opacity:.85;}
+.hero-art svg{width:100%;height:auto;}
+
+/* Filters + grid */
+.filters h2{font-size:1.5rem;margin-bottom:1rem;}
+.filter-row{display:flex;flex-wrap:wrap;gap:.6rem 1.2rem;margin-bottom:1.5rem;}
+.filter-group{display:flex;gap:.5rem;flex-wrap:wrap;}
+.chip{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:.4rem 1rem;cursor:pointer;color:var(--ink-muted);font-size:.9rem;}
+.chip.active{background:var(--ink);border-color:var(--ink);color:var(--bg);}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:1.2rem;}
+.card{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--pine);border-radius:9px;overflow:hidden;padding:0;}
+.card.st-urgente{border-left-color:var(--rust);}
+.card.st-transito{border-left-color:var(--mustard);}
+.card-body{padding:1.1rem;}
+.type-icon{width:16px;height:16px;vertical-align:-3px;margin-right:.35rem;color:var(--ink-muted);}
+.card-status{font-size:.78rem;font-weight:700;color:var(--pine);text-transform:none;margin:0 0 .2rem;}
+.st-urgente .card-status{color:var(--rust);}
+.st-transito .card-status{color:var(--mustard);}
+.card h3{font-size:1.25rem;margin:.15rem 0 .2rem;}
+.card .meta{font-size:.88rem;margin-bottom:.5rem;}
+.tag{display:inline-block;border:1px dashed var(--line);border-radius:5px;padding:.15rem .55rem;font-size:.75rem;color:var(--ink-muted);transform:rotate(-1deg);margin:0 .3rem .3rem 0;}
+.empty{color:var(--ink-muted);}
+.photo-slot{background:repeating-linear-gradient(135deg,var(--surface),var(--surface) 8px,var(--bg) 8px,var(--bg) 16px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.3rem;color:var(--ink-muted);font-size:.72rem;text-align:center;padding:.5rem;}
+.photo-slot svg{width:26px;height:26px;opacity:.65;}
+.card-photo{aspect-ratio:4/3;border-bottom:1px solid var(--line);}
+.detail-photo{aspect-ratio:16/9;border:1px solid var(--line);border-radius:10px;margin-bottom:1rem;}
+.gallery{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem;margin-bottom:1.6rem;}
+.gallery .photo-slot{aspect-ratio:1/1;border:1px dashed var(--line);border-radius:8px;font-size:.65rem;}
+
+/* Detail */
+.detail-head{display:flex;gap:1.2rem;align-items:center;margin-bottom:1rem;}
+.detail-icon{width:70px;height:70px;color:var(--rust);flex-shrink:0;}
+.story{font-size:1.02rem;max-width:65ch;}
+.need-box{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:.9rem 1.1rem;max-width:60ch;color:var(--ink);margin-bottom:1.5rem;}
+hr{border:none;border-top:1px solid var(--line);margin:1.8rem 0;}
+form{max-width:52ch;display:flex;flex-direction:column;gap:.9rem;}
+label{display:flex;flex-direction:column;gap:.35rem;font-size:.92rem;color:var(--ink-muted);font-weight:600;}
+input,select,textarea{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:.6rem .7rem;}
+textarea{min-height:5rem;resize:vertical;}
+.msg{background:var(--surface);border:1px solid var(--pine);color:var(--pine);border-radius:7px;padding:.8rem 1rem;margin-top:.6rem;font-weight:600;}
+
+/* Auth */
+.auth-box{max-width:30rem;margin:0 auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:2rem;}
+.role-tabs{display:flex;gap:.5rem;margin-bottom:.6rem;}
+.tab{flex:1;padding:.6rem;border:1px solid var(--line);background:var(--bg);border-radius:7px;cursor:pointer;font-weight:700;color:var(--ink-muted);}
+.tab.active{background:var(--ink);color:var(--bg);border-color:var(--ink);}
+.auth-note{font-size:.85rem;margin-bottom:1rem;}
+.mode-toggle{display:flex;gap:1.2rem;margin-bottom:1rem;border-bottom:1px solid var(--line);}
+.mode{background:none;border:none;padding:.4rem 0 .7rem;cursor:pointer;color:var(--ink-muted);font-weight:700;border-bottom:2px solid transparent;}
+.mode.active{color:var(--rust);border-color:var(--rust);}
+
+/* Admin */
+.stats-row{display:flex;gap:1.2rem;flex-wrap:wrap;margin:1.2rem 0 2rem;}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:1rem 1.4rem;min-width:150px;}
+.stat strong{display:block;font-family:'Fraunces',serif;font-size:1.8rem;color:var(--rust);}
+.stat span{font-size:.85rem;color:var(--ink-muted);}
+table{width:100%;border-collapse:collapse;margin-bottom:2rem;}
+th,td{text-align:left;padding:.7rem .5rem;border-bottom:1px solid var(--line);font-size:.92rem;}
+th{color:var(--ink-muted);font-weight:700;font-size:.82rem;}
+.badge{padding:.25rem .65rem;border-radius:5px;font-size:.78rem;font-weight:700;}
+.badge-pendiente{background:rgba(180,121,31,.18);color:var(--mustard);}
+.badge-revision{background:rgba(166,81,43,.18);color:var(--rust);}
+.badge-aprobada{background:rgba(67,88,64,.18);color:var(--pine);}
+.msg-item{border-bottom:1px solid var(--line);padding:.8rem 0;}
+.msg-item strong{color:var(--ink);}
+.msg-time{float:right;font-size:.78rem;color:var(--ink-muted);}
+.msg-item p{margin:.3rem 0 0;}
+
+footer{border-top:1px solid var(--line);padding:2rem 1.5rem;text-align:center;color:var(--ink-muted);font-size:.85rem;}
+
+@media (max-width:760px){
+  .hero{grid-template-columns:1fr;}
+  .hero-art{display:none;}
+  .hero h1{font-size:2rem;}
+  .gallery{grid-template-columns:repeat(2,1fr);}
+}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto !important;}}
+</style>
+</head>
+<body>
+
+<svg class="icon-defs" aria-hidden="true">
+<defs>
+<symbol id="icon-paw" viewBox="0 0 100 100">
+<ellipse cx="50" cy="66" rx="24" ry="19" fill="currentColor"/>
+<ellipse cx="20" cy="42" rx="10" ry="13" fill="currentColor"/>
+<ellipse cx="42" cy="26" rx="10" ry="13" fill="currentColor"/>
+<ellipse cx="66" cy="26" rx="10" ry="13" fill="currentColor"/>
+<ellipse cx="86" cy="46" rx="10" ry="13" fill="currentColor"/>
+</symbol>
+<symbol id="icon-dog" viewBox="0 0 100 100">
+<ellipse cx="24" cy="40" rx="14" ry="22" fill="currentColor"/>
+<ellipse cx="76" cy="40" rx="14" ry="22" fill="currentColor"/>
+<circle cx="50" cy="52" r="32" fill="currentColor"/>
+<circle cx="38" cy="48" r="4" fill="var(--surface)"/>
+<circle cx="62" cy="48" r="4" fill="var(--surface)"/>
+<ellipse cx="50" cy="66" rx="9" ry="6" fill="var(--surface)"/>
+</symbol>
+<symbol id="icon-cat" viewBox="0 0 100 100">
+<path d="M22 18 L40 46 L14 46 Z" fill="currentColor"/>
+<path d="M78 18 L86 46 L60 46 Z" fill="currentColor"/>
+<circle cx="50" cy="55" r="30" fill="currentColor"/>
+<circle cx="40" cy="52" r="4" fill="var(--surface)"/>
+<circle cx="60" cy="52" r="4" fill="var(--surface)"/>
+<path d="M45 64 Q50 69 55 64" stroke="var(--surface)" stroke-width="3" fill="none"/>
+</symbol>
+<symbol id="icon-rabbit" viewBox="0 0 100 100">
+<rect x="30" y="6" width="14" height="42" rx="7" fill="currentColor"/>
+<rect x="56" y="6" width="14" height="42" rx="7" fill="currentColor"/>
+<circle cx="50" cy="60" r="28" fill="currentColor"/>
+<circle cx="41" cy="57" r="4" fill="var(--surface)"/>
+<circle cx="59" cy="57" r="4" fill="var(--surface)"/>
+</symbol>
+<symbol id="icon-camera" viewBox="0 0 100 100">
+<rect x="10" y="30" width="80" height="55" rx="10" fill="currentColor"/>
+<rect x="35" y="16" width="30" height="16" rx="4" fill="currentColor"/>
+<circle cx="50" cy="58" r="18" fill="var(--surface)"/>
+<circle cx="50" cy="58" r="10" fill="currentColor"/>
+</symbol>
+</defs>
+</svg>
+
+<header class="nav">
+  <div class="nav-inner">
+    <button class="brand" onclick="showView('home')"><svg><use href="#icon-paw"/></svg>Huellas Encontradas</button>
+    <nav class="nav-links">
+      <button onclick="showView('home')">Catálogo</button>
+      <button id="nav-panel" hidden onclick="showView('admin')">Panel</button>
+      <button id="nav-auth" onclick="navAuthClick()">Acceder</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<section id="view-home" class="view">
+  <div class="hero">
+    <div class="hero-text">
+      <h1>Encuentra a quien ya te estaba esperando</h1>
+      <p class="lead">Reunimos las fichas de animales de varias protectoras en un único catálogo, para que adoptar sea rápido, seguro y sin peregrinar entre refugios.</p>
+      <div class="hero-actions">
+        <button class="btn btn-primary" onclick="document.getElementById('catalogo').scrollIntoView({behavior:'smooth'})">Ver animales en adopción</button>
+        <button class="btn btn-outline" onclick="showAuth('protectora')">Soy una protectora</button>
+      </div>
+    </div>
+    <div class="hero-art"><svg viewBox="0 0 100 100"><use href="#icon-paw"/></svg></div>
+  </div>
+
+  <div class="filters" id="catalogo">
+    <h2>Animales disponibles ahora mismo</h2>
+    <div class="filter-row">
+      <div class="filter-group" id="filter-type">
+        <button class="chip active" data-val="todos">Todos</button>
+        <button class="chip" data-val="perro">Perros</button>
+        <button class="chip" data-val="gato">Gatos</button>
+        <button class="chip" data-val="conejo">Conejos</button>
+      </div>
+      <div class="filter-group" id="filter-status">
+        <button class="chip active" data-val="todos">Cualquier estado</button>
+        <button class="chip" data-val="Urgente">Urgente</button>
+        <button class="chip" data-val="Disponible">Disponible</button>
+        <button class="chip" data-val="En tránsito">En tránsito</button>
+      </div>
+    </div>
+    <div class="grid" id="catalog-grid"></div>
+  </div>
+</section>
+
+<section id="view-detail" class="view" hidden>
+  <button class="btn-link" onclick="showView('home')">← Volver al catálogo</button>
+  <div id="detail-content"></div>
+</section>
+
+<section id="view-auth" class="view" hidden>
+  <div class="auth-box">
+    <div class="mode-toggle">
+      <button class="mode active" id="mode-login" onclick="setMode('login')">Acceder</button>
+      <button class="mode" id="mode-register" onclick="setMode('register')">Crear cuenta</button>
+    </div>
+    
+    <form onsubmit="return executeAuth(event)">
+      <!-- Mantenemos el email siempre visible para login, registro y recuperación -->
+      <label>Email<input type="email" id="auth-email" required></label>
+      
+      <!-- Agrupamos la contraseña y el enlace para poder ocultarlos al pedir recuperar clave -->
+      <div id="wrapper-login-pass">
+        <label class="mt-3">Contraseña<input type="password" id="auth-password"></label>
+        <p style="text-align: right; margin-top: 0.2rem;">
+          <button type="button" class="btn-link" style="font-size: 0.8rem; padding: 0;" onclick="setMode('forgot')">¿Olvidaste tu contraseña?</button>
+        </p>
+      </div>
+      
+      <div id="fields-register" hidden></div>
+
+      <!-- Verificación de nueva cuenta -->
+      <div id="fields-verify" hidden class="mt-3">
+        <p class="auth-note" style="color: var(--rust);">Por favor, introduce el PIN que acabamos de enviar a tu correo.</p>
+        <label>Código PIN<input type="text" id="auth-pin"></label>
+      </div>
+
+      <!-- NUEVO: Restablecimiento de contraseña -->
+      <div id="fields-reset" hidden class="mt-3">
+        <p class="auth-note" style="color: var(--rust);">Introduce el código que te hemos enviado y tu nueva contraseña.</p>
+        <label>Código PIN de recuperación<input type="text" id="reset-pin"></label>
+        <label class="mt-3">Nueva Contraseña<input type="password" id="reset-password"></label>
+      </div>
+
+      <button class="btn btn-primary btn-block mt-3" type="submit" id="auth-submit">Acceder</button>
+      <button type="button" class="btn-link btn-block" style="font-size: 0.85rem;" id="auth-cancel" hidden onclick="setMode('login')">Cancelar</button>
+    </form>
+    
+    <p id="auth-msg" class="msg" hidden></p>
+    
+    <!-- Enlace para protectoras -->
+    <p class="text-center mt-4" style="font-size: 0.85rem; color: var(--ink-muted); text-align: center; margin-top: 1.5rem;">
+      ¿Eres una protectora y quieres publicar animales? <a href="mailto:admin@refugiocloud.com">Contáctanos</a>.
+    </p>
+  </div>
+</section>
+
+<section id="view-admin" class="view" hidden>
+  <h2>Panel de la protectora</h2>
+  <div class="stats-row">
+    <div class="stat"><strong id="stat-animales">0</strong><span>Animales publicados</span></div>
+    <div class="stat"><strong id="stat-pendientes">0</strong><span>Solicitudes pendientes</span></div>
+    <div class="stat"><strong>3</strong><span>Adopciones este mes</span></div>
+  </div>
+  <h3>Solicitudes recibidas</h3>
+  <table>
+    <thead><tr><th>Adoptante</th><th>Animal</th><th>Fecha</th><th>Estado</th><th></th></tr></thead>
+    <tbody id="solicitudes-body"></tbody>
+  </table>
+  <h3>Mensajes y notificaciones</h3>
+  <div id="mensajes-list"></div>
+</section>
+
+</main>
+
+<footer>Huellas Encontradas · prototipo estático del frontend (S3 + CloudFront)</footer>
+
+<script>
+const animals=[
+{id:1,name:'Rocco',type:'perro',icon:'dog',breed:'Mestizo',age:'3 años',sex:'Macho',size:'Grande',status:'Disponible',need:'Ninguna necesidad especial',story:'Rocco llegó al refugio hace ocho meses tras ser encontrado en una carretera. Es tranquilo, obediente y le encanta pasear largo rato. Ya sabe convivir con otros perros.'},
+{id:2,name:'Luna',type:'gato',icon:'cat',breed:'Europeo común',age:'1 año',sex:'Hembra',size:'Pequeña',status:'Urgente',need:'Requiere medicación diaria (FIV+)',story:'Luna es positiva en FIV, lo que no le impide llevar una vida normal en un hogar sin otros gatos sin vacunar. Es cariñosa y busca casa con urgencia porque el refugio está saturado.'},
+{id:3,name:'Coco',type:'conejo',icon:'rabbit',breed:'Enano',age:'8 meses',sex:'Macho',size:'Pequeña',status:'Disponible',need:'Ninguna necesidad especial',story:'Coco es curioso y activo. Necesita espacio para moverse y una dieta rica en fibra. Se lleva bien con niños tranquilos.'},
+{id:4,name:'Nube',type:'perro',icon:'dog',breed:'Galgo',age:'5 años',sex:'Hembra',size:'Grande',status:'En tránsito',need:'Ansiedad por separación',story:'Nube viene de otra protectora con más solicitudes que plazas. Es sensible y necesita una familia que no pase muchas horas fuera de casa al principio.'},
+{id:5,name:'Tigre',type:'gato',icon:'cat',breed:'Naranja común',age:'2 años',sex:'Macho',size:'Mediano',status:'Disponible',need:'Revisión veterinaria cada 6 meses',story:'Tigre es independiente pero busca compañía por las noches. Se adapta bien a pisos y le gusta dormir al sol.'},
+{id:6,name:'Pepa',type:'perro',icon:'dog',breed:'Podenco',age:'6 meses',sex:'Hembra',size:'Mediana',status:'Disponible',need:'En proceso de educación básica',story:'Pepa es cachorra, muy juguetona y está aprendiendo las normas básicas de convivencia. Ideal para una familia con tiempo para seguir su educación.'}
+];
+let solicitudes=[
+{id:1,adoptante:'Marta G.',animal:'Luna',fecha:'12/09/2026',estado:'Pendiente'},
+{id:2,adoptante:'Javier R.',animal:'Rocco',fecha:'15/09/2026',estado:'En revisión'},
+{id:3,adoptante:'Elena P.',animal:'Nube',fecha:'20/09/2026',estado:'Aprobada'},
+{id:4,adoptante:'Sergio M.',animal:'Coco',fecha:'22/09/2026',estado:'Pendiente'}
+];
+const mensajes=[
+{titulo:'Nueva solicitud recibida',detalle:'Marta G. ha solicitado la adopción de Luna.',tiempo:'Hace 2 horas'},
+{titulo:'Documento pendiente',detalle:'Falta el justificante de vivienda de Javier R. para Rocco.',tiempo:'Hace 1 día'},
+{titulo:'Adopción confirmada',detalle:'Elena P. ha completado el proceso de adopción de Nube.',tiempo:'Hace 3 días'}
+];
+
+let activeType='todos', activeStatus='todos', selectedRole='adoptante', authMode='login', currentRole=null;
+
+function showView(id){document.querySelectorAll('.view').forEach(v=>v.hidden=true);document.getElementById('view-'+id).hidden=false;window.scrollTo({top:0,behavior:'smooth'});}
+
+function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
+
+function cardHTML(a){
+  const cls=a.status==='Urgente'?'st-urgente':a.status==='En tránsito'?'st-transito':'';
+  return `<article class="card ${cls}">
+    <div class="card-photo photo-slot"><svg><use href="#icon-camera"/></svg><span>Foto de ${a.name}</span></div>
+    <div class="card-body">
+      <p class="card-status">${a.status}</p>
+      <h3>${a.name}</h3>
+      <p class="meta"><svg class="type-icon"><use href="#icon-${a.icon}"/></svg>${a.breed}, ${a.age}, ${a.sex}</p>
+      <span class="tag">${cap(a.type)}</span>
+      ${a.need!=='Ninguna necesidad especial'?`<span class="tag">${a.need}</span>`:''}
+      <button class="btn btn-outline btn-block" onclick="openDetail(${a.id})">Ver ficha completa</button>
+    </div>
+  </article>`;
+}
+function renderCatalog(){
+  const grid=document.getElementById('catalog-grid');
+  const filtered=animals.filter(a=>(activeType==='todos'||a.type===activeType)&&(activeStatus==='todos'||a.status===activeStatus));
+  grid.innerHTML=filtered.map(cardHTML).join('')||'<p class="empty">No hay animales con estos filtros. Prueba a quitar alguno.</p>';
+}
+document.getElementById('filter-type').addEventListener('click',e=>{
+  if(!e.target.matches('.chip'))return;
+  [...e.currentTarget.children].forEach(c=>c.classList.remove('active'));
+  e.target.classList.add('active');activeType=e.target.dataset.val;renderCatalog();
+});
+document.getElementById('filter-status').addEventListener('click',e=>{
+  if(!e.target.matches('.chip'))return;
+  [...e.currentTarget.children].forEach(c=>c.classList.remove('active'));
+  e.target.classList.add('active');activeStatus=e.target.dataset.val;renderCatalog();
+});
+
+function openDetail(id){
+  const a=animals.find(x=>x.id===id);
+  document.getElementById('detail-content').innerHTML=`
+    <div class="detail-photo photo-slot"><svg><use href="#icon-camera"/></svg><span>Foto principal de ${a.name}</span></div>
+    <div class="gallery">
+      <div class="photo-slot"><svg><use href="#icon-camera"/></svg><span>Foto 2</span></div>
+      <div class="photo-slot"><svg><use href="#icon-camera"/></svg><span>Foto 3</span></div>
+      <div class="photo-slot"><svg><use href="#icon-camera"/></svg><span>Foto 4</span></div>
+      <div class="photo-slot"><svg><use href="#icon-camera"/></svg><span>Foto 5</span></div>
+    </div>
+    <div class="detail-head">
+      <svg class="detail-icon"><use href="#icon-${a.icon}"/></svg>
+      <div>
+        <p class="card-status">${a.status}</p>
+        <h1>${a.name}</h1>
+        <p class="meta">${a.breed}, ${a.age}, ${a.sex}, tamaño ${a.size.toLowerCase()}</p>
+      </div>
+    </div>
+    <p class="story">${a.story}</p>
+    <div class="need-box"><strong>Necesidades:</strong> ${a.need}</div>
+    <hr>
+    <h2>Solicitar la adopción de ${a.name}</h2>
+    <form onsubmit="return handleSolicitud(event)">
+      <label>Tu nombre<input type="text" required></label>
+      <label>Email<input type="email" required></label>
+      <label>Teléfono<input type="tel"></label>
+      <label>Tipo de vivienda
+        <select><option>Piso sin exterior</option><option>Piso con terraza</option><option>Casa con jardín</option></select>
+      </label>
+      <label>¿Tienes otros animales en casa?
+        <select><option>No</option><option>Sí</option></select>
+      </label>
+      <label>Experiencia previa con esta especie
+        <select><option>No</option><option>Sí</option></select>
+      </label>
+      <label>Disponibilidad diaria
+        <select><option>Menos de 4 horas</option><option>Entre 4 y 8 horas</option><option>Todo el día</option></select>
+      </label>
+      <label>¿Por qué creéis que encajáis?<textarea></textarea></label>
+      <button class="btn btn-primary" type="submit">Enviar solicitud de adopción</button>
+    </form>
+    <p id="solicitud-msg" class="msg" hidden></p>
+  `;
+  showView('detail');
+}
+function handleSolicitud(e){
+  e.preventDefault();
+  const m=document.getElementById('solicitud-msg');
+  m.textContent='Solicitud enviada. La protectora revisará tu cuestionario y te contactará por email.';
+  m.hidden=false;e.target.reset();return false;
+}
+
+function showAuth(role){selectedRole=role;setRole(role);showView('auth');}
+function setRole(role){
+  selectedRole=role;
+  document.getElementById('tab-adoptante').classList.toggle('active',role==='adoptante');
+  document.getElementById('tab-protectora').classList.toggle('active',role==='protectora');
+  updateAuthFields();
+}
+
+function renderAdmin(){
+  document.getElementById('stat-animales').textContent=animals.length;
+  document.getElementById('stat-pendientes').textContent=solicitudes.filter(s=>s.estado==='Pendiente').length;
+  document.getElementById('solicitudes-body').innerHTML=solicitudes.map(rowHTML).join('');
+  document.getElementById('mensajes-list').innerHTML=mensajes.map(m=>`<div class="msg-item"><strong>${m.titulo}</strong><span class="msg-time">${m.tiempo}</span><p>${m.detalle}</p></div>`).join('');
+}
+function rowHTML(s){
+  const cls=s.estado==='Pendiente'?'badge-pendiente':s.estado==='En revisión'?'badge-revision':'badge-aprobada';
+  const next=s.estado==='Aprobada'?'':`<button class="btn-small" onclick="advanceEstado(${s.id})">Avanzar estado</button>`;
+  return `<tr><td>${s.adoptante}</td><td>${s.animal}</td><td>${s.fecha}</td><td><span class="badge ${cls}">${s.estado}</span></td><td>${next}</td></tr>`;
+}
+function advanceEstado(id){
+  const s=solicitudes.find(x=>x.id===id);
+  const order=['Pendiente','En revisión','Aprobada'];
+  const idx=order.indexOf(s.estado);
+  if(idx>-1&&idx<order.length-1){s.estado=order[idx+1];renderAdmin();}
+}
+
+// --- CONFIGURACIÓN DE COGNITO ---
+const poolData = {
+  UserPoolId: 'us-east-1_CPLrtrYlv', 
+  ClientId: '1kscgrad98q7ik6jv125vjvlrd'    
+};
+const userPool = new AmazonCognitoIdentity.CognitoUserPool(poolData);
+let unverifiedCognitoUser = null; 
+
+// --- FUNCIONES AUXILIARES ---
+// Decodifica el Token JWT para ver si el usuario pertenece al grupo "Protectora"
+function isUserProtectora(jwtToken) {
+  try {
+    const payload = JSON.parse(atob(jwtToken.split('.')[1]));
+    const groups = payload['cognito:groups'] || [];
+    return groups.includes('Protectora');
+  } catch (e) {
+    return false;
+  }
+}
+
+// --- LÓGICA DE INTERFAZ AUTH ---
+function setMode(mode){
+  authMode = mode;
+  document.getElementById('mode-login').classList.toggle('active', mode==='login');
+  document.getElementById('mode-register').classList.toggle('active', mode==='register');
+  
+  const submitBtn = document.getElementById('auth-submit');
+  if (mode === 'verify') submitBtn.textContent = 'Confirmar PIN';
+  else if (mode === 'forgot') submitBtn.textContent = 'Enviar código de recuperación';
+  else if (mode === 'reset') submitBtn.textContent = 'Guardar nueva contraseña';
+  else submitBtn.textContent = mode === 'login' ? 'Acceder' : 'Crear cuenta';
+  
+  updateAuthFields();
+}
+
+function updateAuthFields(){
+  // Ocultamos/mostramos bloques según el modo en el que estemos
+  document.getElementById('wrapper-login-pass').hidden = (authMode !== 'login');
+  document.getElementById('fields-register').hidden = (authMode !== 'register');
+  document.getElementById('fields-verify').hidden = (authMode !== 'verify');
+  document.getElementById('fields-reset').hidden = (authMode !== 'reset');
+  document.getElementById('auth-cancel').hidden = (authMode === 'login' || authMode === 'register');
+}
+
+// --- LÓGICA DE AUTENTICACIÓN ---
+function executeAuth(e) {
+  e.preventDefault();
+  const email = document.getElementById('auth-email').value;
+  const password = document.getElementById('auth-password').value;
+  const msg = document.getElementById('auth-msg');
+
+  if (authMode === 'login') {
+    const authenticationDetails = new AmazonCognitoIdentity.AuthenticationDetails({ Username: email, Password: password });
+    const cognitoUser = new AmazonCognitoIdentity.CognitoUser({ Username: email, Pool: userPool });
+
+    cognitoUser.authenticateUser(authenticationDetails, {
+      onSuccess: function (result) {
+        const accessToken = result.getAccessToken().getJwtToken();
+        localStorage.setItem('jwtToken', accessToken); 
+        const isProtectora = isUserProtectora(accessToken);
+        document.getElementById('nav-auth').textContent = 'Cerrar sesión';
+        document.getElementById('nav-panel').hidden = !isProtectora; 
+        if (isProtectora) { renderAdmin(); showView('admin'); } 
+        else { msg.textContent = 'Sesión iniciada correctamente.'; msg.hidden = false; showView('home'); }
+      },
+      onFailure: function (err) { msg.textContent = err.message || 'Error de inicio de sesión'; msg.hidden = false; }
+    });
+
+  } else if (authMode === 'register') {
+    const attributeList = [new AmazonCognitoIdentity.CognitoUserAttribute({ Name: 'email', Value: email })];
+    userPool.signUp(email, password, attributeList, null, function(err, result) {
+      if (err) { msg.textContent = err.message || 'Error al registrar'; msg.hidden = false; return; }
+      unverifiedCognitoUser = result.user;
+      setMode('verify'); 
+    });
+
+  } else if (authMode === 'verify') {
+    const pin = document.getElementById('auth-pin').value;
+    unverifiedCognitoUser.confirmRegistration(pin, true, function(err, result) {
+      if (err) { msg.textContent = err.message || 'PIN incorrecto'; msg.hidden = false; return; }
+      msg.textContent = '¡Cuenta verificada! Ya puedes acceder.'; msg.hidden = false;
+      setMode('login'); document.getElementById('auth-password').value = ''; 
+    });
+
+  // --- NUEVO: Solicitar recuperación de contraseña ---
+  } else if (authMode === 'forgot') {
+    const cognitoUser = new AmazonCognitoIdentity.CognitoUser({ Username: email, Pool: userPool });
+    cognitoUser.forgotPassword({
+      onSuccess: function (data) {
+        msg.textContent = 'Te hemos enviado un código al correo.'; msg.hidden = false;
+        setMode('reset');
+      },
+      onFailure: function (err) { msg.textContent = err.message || 'Error al solicitar código'; msg.hidden = false; }
+    });
+
+  // --- NUEVO: Confirmar nueva contraseña ---
+  } else if (authMode === 'reset') {
+    const pin = document.getElementById('reset-pin').value;
+    const newPass = document.getElementById('reset-password').value;
+    const cognitoUser = new AmazonCognitoIdentity.CognitoUser({ Username: email, Pool: userPool });
+    
+    cognitoUser.confirmPassword(pin, newPass, {
+      onSuccess: function() {
+        msg.textContent = 'Contraseña actualizada. Ya puedes iniciar sesión con tu nueva clave.'; msg.hidden = false;
+        setMode('login'); document.getElementById('auth-password').value = '';
+      },
+      onFailure: function(err) { msg.textContent = err.message || 'Error al cambiar contraseña'; msg.hidden = false; }
+    });
+  }
+  return false;
+}
+
+function navAuthClick(){
+  const currentUser = userPool.getCurrentUser();
+  if (currentUser) {
+    currentUser.signOut();
+    localStorage.removeItem('jwtToken');
+    document.getElementById('nav-auth').textContent = 'Acceder';
+    document.getElementById('nav-panel').hidden = true;
+    showView('home');
+  } else {
+    setMode('login');
+    showView('auth');
+  }
+}
+
+renderCatalog();
+</script>
