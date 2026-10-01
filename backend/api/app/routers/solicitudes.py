@@ -2,15 +2,20 @@
 
 Sin autenticación: este el camino de quien pregunta sin crearse una cuenta.
 """
+from datetime import datetime, timedelta
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 
 from app.core import repositorio_catalogo as repo_catalogo
 from app.core import repositorio_solicitudes as repo_solicitudes
+from app.core.tokens import generar_token
 from app.models.solicitud import Solicitud
 from app.services.notificador import obtener_notificador
 
 router = APIRouter(tags=["solicitudes"])
+
+TOKEN_DECISION_VALIDEZ = timedelta(days=7)
 
 
 class SolicitudEntrada(BaseModel):
@@ -21,7 +26,12 @@ class SolicitudEntrada(BaseModel):
     mensaje: str = Field(min_length=1)
 
 
-@router.post("/solicitudes", response_model=Solicitud, status_code=201)
+@router.post(
+    "/solicitudes",
+    response_model=Solicitud,
+    response_model_exclude={"tokenHash", "tokenExpira"},
+    status_code=201,
+)
 def crear_solicitud(entrada: SolicitudEntrada) -> Solicitud:
     animal = repo_catalogo.obtener_animal(entrada.animalId)
     if animal is None:
@@ -31,6 +41,7 @@ def crear_solicitud(entrada: SolicitudEntrada) -> Solicitud:
     if guarderia is None:
         raise HTTPException(status_code=404, detail="Guardería no encontrada")
 
+    token, token_hash = generar_token()
     solicitud = Solicitud(
         animalId=animal.id,
         guarderiaId=animal.guarderiaId,
@@ -38,8 +49,10 @@ def crear_solicitud(entrada: SolicitudEntrada) -> Solicitud:
         email=entrada.email,
         telefono=entrada.telefono,
         mensaje=entrada.mensaje,
+        tokenHash=token_hash,
+        tokenExpira=datetime.utcnow() + TOKEN_DECISION_VALIDEZ,
     )
     repo_solicitudes.crear_solicitud(solicitud)
-    obtener_notificador().notificar_nueva_solicitud(solicitud, animal, guarderia)
+    obtener_notificador().notificar_nueva_solicitud(solicitud, animal, guarderia, token)
 
     return solicitud
