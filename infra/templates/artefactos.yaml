@@ -1,6 +1,13 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  Bucket S3 con los zips de las Lambdas 
+  Bucket S3 con los zips de las Lambdas (backend/api y
+  backend/event_lambdas/*), que auth.yaml y api.yaml referencian por
+  parámetro. Sin esto no hay dónde apuntar CodigoS3Bucket/CodigoS3Key. También
+  el repositorio ECR de la Lambda de thumbnails: va aquí y no en fotos.yaml
+  por el mismo motivo que el bucket — fotos.yaml necesita una imagen ya
+  subida para crear la Lambda (PackageType Image), así que el repositorio
+  tiene que existir en un stack anterior, igual que este bucket existe antes
+  de que build-lambdas.sh suba nada.
 Parameters:
   Proyecto:
     Type: String
