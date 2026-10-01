@@ -1,4 +1,7 @@
 """Perfil e historial del cliente, y solicitudes creadas con sesión iniciada.
+
+JWT + grupo CLIENTE. El `sub` sale del token, nunca de la URL ni del cuerpo:
+un cliente solo puede leer y escribir su propio ítem.
 """
 from datetime import datetime, timedelta
 
@@ -105,3 +108,12 @@ def crear_solicitud_con_sesion(entrada: SolicitudClienteEntrada, sub: str = Depe
     return solicitud
 
 
+@router.delete("", status_code=204)
+def borrar_cuenta(sub: str = Depends(requiere_cliente)) -> None:
+    """Derecho de supresión en autoservicio. Orden importante: primero las solicitudes, luego el perfil, y
+    solo entonces Cognito — si se borrase el usuario de Cognito primero, un
+    fallo a mitad dejaría datos huérfanos sin dueño identificable.
+    """
+    repo_solicitudes.eliminar_solicitudes_de_cliente(sub)
+    repo_solicitudes.eliminar_cliente(sub)
+    cognito.admin_delete_user(UserPoolId=config.USER_POOL_ID, Username=sub)

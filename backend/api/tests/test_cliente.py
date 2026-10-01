@@ -36,3 +36,19 @@ def test_actualizar_perfil_y_crear_solicitud_con_sesion(cliente, autenticar):
 
     historial = cliente.get("/cliente/solicitudes").json()
     assert any(s["animalId"] == "a1" for s in historial)
+
+def test_borrar_cuenta_borra_perfil_y_solicitudes_antes_que_cognito(cliente, autenticar):
+    autenticar(requiere_cliente, "c2")
+    # Deja una solicitud propia para comprobar que el borrado también la alcanza.
+    cliente.post("/cliente/solicitudes", json={"animalId": "a6", "mensaje": "Interesada en Mia."})
+
+    with patch("app.routers.cliente.cognito.admin_delete_user") as admin_delete_user:
+        respuesta = cliente.delete("/cliente")
+
+    assert respuesta.status_code == 204
+    admin_delete_user.assert_called_once()
+    assert admin_delete_user.call_args.kwargs["Username"] == "c2"
+
+    # El perfil ya no existe: comprobarlo con otra petición autenticada como c2.
+    assert cliente.get("/cliente/perfil").status_code == 404
+    assert cliente.get("/cliente/solicitudes").json() == []
