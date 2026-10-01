@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Infraestructura Serverless Frontend (Solo S3 Website, sin CloudFront por restricciones del Lab).
+
+Resources:
+  # 1. Bucket S3 configurado como Website Hosting
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        IgnorePublicAcls: false
+        BlockPublicPolicy: false
+        RestrictPublicBuckets: false
+
+  # 2. Política para hacer los archivos legibles al público
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "${FrontendBucket.Arn}/*"
+
+Outputs:
+  WebsiteURL:
+    Description: URL publica para acceder a la aplicacion
+    Value: !GetAtt FrontendBucket.WebsiteURL
+  BucketName:
+    Description: Nombre del bucket donde debes subir los archivos generados con Vite
+    Value: !Ref FrontendBucket
