@@ -3,7 +3,10 @@ Description: >
   Fotos de animales: bucket de originales (destino de las subidas
   presignadas), bucket de derivadas (miniaturas generadas) y Lambda de
   thumbnails (imagen de contenedor, Pillow) disparada por el evento de
-  subida. 
+  subida. Depende de dynamodb.yaml (ARN de la tabla catalogo) y de
+  artefactos.yaml (URI de la imagen ya subida a ECR: el repositorio vive ahí,
+  no aquí, para evitar repetición — ver artefactos.yaml).
+
 Parameters:
   Proyecto:
     Type: String
@@ -20,6 +23,11 @@ Parameters:
       build-thumbnails-image.sh, sobre el repositorio de artefactos.yaml.
 
 Resources:
+  # ---------------------------------------------------------------------
+  # Lambda primero: el bucket de originales necesita el permiso de
+  # invocación (más abajo) antes de poder activar su notificación, y ese
+  # permiso necesita que la función ya exista.
+  # ---------------------------------------------------------------------
   RolThumbnails:
     Type: AWS::IAM::Role
     Properties:
@@ -69,6 +77,11 @@ Resources:
       LogGroupName: !Sub "/aws/lambda/${FnThumbnails}"
       RetentionInDays: 30
 
+  # El SourceArn se construye con !Sub, no con !GetAtt sobre el bucket, a
+  # propósito: así este permiso solo depende de FnThumbnails, nunca del
+  # bucket, y el bucket puede depender de este permiso (más abajo) sin
+  # formar un ciclo. Es el mismo patrón que usa la documentación oficial de
+  # AWS para notificaciones S3 > Lambda dentro de un único stack.
   PermisoS3InvocaThumbnails:
     Type: AWS::Lambda::Permission
     Properties:
@@ -78,6 +91,10 @@ Resources:
       SourceAccount: !Ref "AWS::AccountId"
       SourceArn: !Sub "arn:${AWS::Partition}:s3:::${Proyecto}-${Entorno}-fotos-originales-${AWS::AccountId}"
 
+  # ---------------------------------------------------------------------
+  # Buckets. Privados los dos: sin CloudFront/OAC todavía (fase pendiente,
+  # igual que el bucket del catálogo), así que ninguno se publica en una URL.
+  # ---------------------------------------------------------------------
   BucketFotosOriginales:
     Type: AWS::S3::Bucket
     DependsOn: PermisoS3InvocaThumbnails

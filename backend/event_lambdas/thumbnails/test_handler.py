@@ -55,5 +55,8 @@ def test_datos_que_no_son_una_imagen_devuelven_none():
 
 
 def test_content_type_mentiroso_no_engana_a_pillow():
+    """Un .txt renombrado a .jpg (o con Content-Type falso) sigue sin ser una
+    imagen real cuando Pillow lo abre de verdad — el escenario exacto que
+    justifica no confiar en el Content-Type declarado en la presignada."""
     datos_falsos = b"contenido de texto plano que alguien llamo foto.jpg"
     assert procesar_imagen(datos_falsos) is None

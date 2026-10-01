@@ -1,3 +1,18 @@
+#!/usr/bin/env bash
+# Construye la imagen de la Lambda de thumbnails (Pillow) y la sube al
+# repositorio ECR de artefactos.yaml. No usa build-lambdas.sh: esta Lambda va
+# como imagen de contenedor, no como zip 
+#
+# Requisito previo: deploy-all.sh <entorno> (crea el repositorio ECR en
+# artefactos.yaml). Ejecutar esto ANTES de deploy-fotos.sh: fotos.yaml
+# necesita la imagen ya subida para poder crear la Lambda (PackageType Image
+# exige que la imagen exista en el momento de crear la función).
+#
+# Requiere Docker con soporte multiplataforma (buildx). En Windows/AMD64,
+# construir para ARM64 necesita emulación QEMU — este script la registra si
+# hace falta (comando idempotente, no rompe nada si ya estaba).
+#
+# Uso: ./infra/scripts/build-thumbnails-image.sh <dev|prod>
 set -euo pipefail
 
 ENTORNO="${1:-}"

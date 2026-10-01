@@ -1,3 +1,13 @@
+#!/usr/bin/env bash
+# Despliega fotos.yaml (buckets de originales/derivadas + Lambda de
+# thumbnails), apuntando a la imagen que dejó build-thumbnails-image.sh en
+# ECR.
+#
+# Requisitos previos, en orden: deploy-all.sh <entorno> (crea dynamodb y el
+# repositorio ECR en artefactos.yaml) y build-thumbnails-image.sh <entorno>
+# (sube la imagen).
+#
+# Uso: ./infra/scripts/deploy-fotos.sh <dev|prod>
 set -euo pipefail
 
 ENTORNO="${1:-}"

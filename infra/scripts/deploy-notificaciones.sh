@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Despliega notificaciones.yaml (cola SQS + DLQ + SES + Lambda consumidora)
+# Despliega notificaciones.yaml (cola SQS + DLQ + SES + Lambda consumidora),
+# apuntando al zip que dejó build-lambdas.sh en el bucket de artefactos.
 #
 # Uso: ./infra/scripts/deploy-notificaciones.sh <dev|prod>
 set -euo pipefail
@@ -46,6 +47,10 @@ aws cloudformation deploy \
     EmailAlertas="$(valor_parametro EmailAlertas)" \
     EmailRemitenteSes="$(valor_parametro EmailRemitenteSes)"
 
+# CloudFormation no vuelve a subir el código si el S3Key no cambió, aunque el
+# objeto en S3 sea distinto (compara la cadena, no el contenido). Como el key
+# es siempre el mismo, hay que forzar la actualización a mano.
+echo "Forzando actualización de código..."
 aws lambda update-function-code \
   --function-name "${PROYECTO}-${ENTORNO}-consumidora-notificaciones" \
   --s3-bucket "$BUCKET" --s3-key "lambdas/consumidor-notificaciones.zip" \
