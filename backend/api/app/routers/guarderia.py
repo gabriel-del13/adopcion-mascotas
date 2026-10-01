@@ -159,10 +159,20 @@ def subir_foto(
     entrada: FotoEntrada,
     sub: str = Depends(requiere_guarderia),
 ) -> PresignedPost:
+    """Devuelve una URL presignada de POST (no PUT: PUT no admite límite de
+    tamaño) para que el navegador suba la foto directo a S3, sin pasar por la
+    API. La clave del objeto la decide el servidor, nunca quien llama. El
+    Content-Type declarado aquí se puede mentir; quien lo verifica de verdad
+    es la Lambda de thumbnails al abrir el fichero con Pillow.
+    """
     if sub != guarderia_id:
         raise HTTPException(status_code=403, detail="No puede publicar fotos de otra guardería")
 
     animal = _obtener_animal_propio(guarderia_id, animal_id)
+    # Límite de mejor esfuerzo: varias peticiones simultáneas podrían colarse
+    # por encima de 5 antes de que la primera termine de procesarse (fotos
+    # solo crece cuando la Lambda de thumbnails confirma cada una). Caso poco
+    # frecuente, mismo criterio que la falta de transacción entre tablas.
     if len(animal.fotos) >= MAX_FOTOS_POR_ANIMAL:
         raise HTTPException(status_code=409, detail=f"El animal ya tiene el máximo de {MAX_FOTOS_POR_ANIMAL} fotos")
     if entrada.contentType not in TIPOS_CONTENIDO_PERMITIDOS:
@@ -184,7 +194,8 @@ def subir_foto(
 
 
 def _borrar_fotos_de_animal(animal: Animal) -> None:
-    # Borra original + las dos derivadas de cada foto
+    """Borra original + las dos derivadas de cada foto. Se llama antes de
+    borrar el ítem del animal."""
     if not animal.fotos:
         return
 
