@@ -16,7 +16,10 @@ os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "local")
 _recurso = boto3.resource(
     "dynamodb",
     region_name=config.REGION,
-    endpoint_url=config.DYNAMODB_ENDPOINT_URL,
+    # endpoint_url=None hace que boto3 use el endpoint real de DynamoDB en la
+    # región: pasarle "http://localhost:8000" en Lambda cuelga la conexión
+    # hasta el timeout, porque ahí no hay nada escuchando en ese puerto.
+    **({"endpoint_url": config.DYNAMODB_ENDPOINT_URL} if config.DYNAMODB_ENDPOINT_URL else {}),
 )
 
 tabla_catalogo = _recurso.Table(config.TABLA_CATALOGO)
