@@ -1,4 +1,13 @@
-""""""
+"""Enlaces de decisión por correo: aceptar/rechazar una solicitud sin login.
+
+Sin JWT: la autorización es un token de un solo uso. El GET solo valida y muestra una página de confirmación -nunca
+ejecuta la acción-, porque los antivirus y previsualizadores de correo abren
+automáticamente los enlaces de un mensaje. La acción va en el POST, que
+dispara desde esa misma página.
+
+Autocontenido a propósito: no depende del frontend (que aún no existe para
+esta pieza), así que sirve su propio HTML mínimo sin CSS/JS externo.
+"""
 import logging
 from datetime import datetime
 from html import escape
@@ -41,6 +50,9 @@ def _mensaje(titulo: str, texto: str, estado_http: int) -> HTMLResponse:
 
 
 def _solicitud_valida(animal_id: str, fecha: str, token: str) -> Solicitud | None:
+    """None si la solicitud no existe, ya se resolvió, el token no
+    corresponde o caducó. No distingue el motivo en el valor de retorno: sí lo
+    distingue el llamador para el mensaje al usuario."""
     solicitud = repo_solicitudes.obtener_solicitud(animal_id, fecha)
     if solicitud is None or solicitud.estado != EstadoSolicitud.pendiente:
         return None
@@ -64,6 +76,8 @@ def mostrar_confirmacion(animalId: str, fecha: str, token: str, accion: Accion) 
     if _solicitud_valida(animalId, fecha, token) is None:
         return _mensaje("Enlace no válido", "Este enlace no es válido o ha caducado.", 403)
 
+    # Todo lo interpolado abajo es controlado por quien envió la solicitud (o
+    # por la query string del enlace) y nunca debe insertarse sin escapar.
     cuerpo = f"""
     <dl>
       <dt>Adoptante</dt><dd>{escape(solicitud.nombre or "")}</dd>
