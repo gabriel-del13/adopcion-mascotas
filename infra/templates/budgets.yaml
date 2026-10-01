@@ -21,7 +21,8 @@ Parameters:
 Resources:
   # Notificación por email directa, no por SNS: AWS Budgets solo admite temas
   # SNS creados en us-east-1, mientras que las alarmas de CloudWatch
-  # viven en eu-west-1.
+  # viven en eu-west-1. El tema SNS "alertas-operacion" se crea más
+  # adelante, junto a esas alarmas, y es un mecanismo aparte de este.
   Presupuesto:
     Type: AWS::Budgets::Budget
     Properties:
