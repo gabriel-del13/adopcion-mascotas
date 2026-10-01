@@ -7,6 +7,15 @@
 # (infra/parameters/README.md: los stacks sueltos no usan file://). Los
 # valores comunes se leen del fichero de parámetros del entorno para no
 # duplicarlos a mano en la línea de comandos.
+
+#
+# auth.yaml, api.yaml, catalogo.yaml y notificaciones.yaml no están aquí: sus
+# Lambdas necesitan un zip real en S3 (CodigoS3Bucket/CodigoS3Key), que
+# produce y sube infra/scripts/build-lambdas.sh <entorno> (necesita que este
+# script haya creado ya el bucket de artefactos). fotos.yaml tampoco: su
+# Lambda de thumbnails necesita una imagen ya subida al repositorio ECR que
+# sí crea este script (en artefactos.yaml), vía
+# infra/scripts/build-thumbnails-image.sh <entorno>.
 set -euo pipefail
 
 ENTORNO="${1:-}"

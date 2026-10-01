@@ -152,7 +152,7 @@ Resources:
         Variables:
           EMAIL_REMITENTE: !Ref EmailRemitenteSes
       # Sin ReservedConcurrentExecutions: mismo límite de cuenta de 10
-      # ejecuciones concurrentes documentado en api.yaml
+      # ejecuciones concurrentes documentado en api.yaml y catalogo.yaml.
 
   LogGroupConsumidoraNotificaciones:
     Type: AWS::Logs::LogGroup
