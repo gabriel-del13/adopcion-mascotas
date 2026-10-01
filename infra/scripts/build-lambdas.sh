@@ -1,0 +1,65 @@
+set -euo pipefail
+
+ENTORNO="${1:-}"
+if [ "$ENTORNO" != "dev" ] && [ "$ENTORNO" != "prod" ]; then
+  echo "Uso: $0 <dev|prod>" >&2
+  exit 1
+fi
+
+DIR_RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+valor_parametro() {
+  python -c "
+import json, sys
+with open(sys.argv[1]) as f:
+    params = json.load(f)
+for p in params:
+    if p['ParameterKey'] == sys.argv[2]:
+        print(p['ParameterValue'])
+        break
+" "$DIR_RAIZ/infra/parameters/$ENTORNO.json" "$1"
+}
+
+PROYECTO="$(valor_parametro Proyecto)"
+CUENTA="$(aws sts get-caller-identity --query Account --output text)"
+BUCKET="${PROYECTO}-${ENTORNO}-artefactos-${CUENTA}"
+
+BUILD_DIR="$(mktemp -d)"
+trap 'rm -rf "$BUILD_DIR"' EXIT
+
+echo "Empaquetando backend/api..."
+API_BUILD="$BUILD_DIR/api"
+mkdir -p "$API_BUILD"
+python -m pip install \
+  --platform manylinux2014_aarch64 \
+  --implementation cp \
+  --python-version 3.12 \
+  --only-binary=:all: \
+  --no-compile \
+  --target "$API_BUILD" \
+  -r "$DIR_RAIZ/backend/api/requirements.txt" \
+  --quiet
+cp -r "$DIR_RAIZ/backend/api/app" "$API_BUILD/app"
+python "$DIR_RAIZ/infra/scripts/zip_dir.py" "$API_BUILD" "$BUILD_DIR/api.zip"
+
+PC_BUILD="$BUILD_DIR/post_confirmation"
+mkdir -p "$PC_BUILD"
+cp "$DIR_RAIZ/backend/event_lambdas/post_confirmation/handler.py" "$PC_BUILD/handler.py"
+python "$DIR_RAIZ/infra/scripts/zip_dir.py" "$PC_BUILD" "$BUILD_DIR/post-confirmation.zip"
+
+RC_BUILD="$BUILD_DIR/regenerador_catalogo"
+mkdir -p "$RC_BUILD"
+cp "$DIR_RAIZ/backend/event_lambdas/regenerador_catalogo/handler.py" "$RC_BUILD/handler.py"
+python "$DIR_RAIZ/infra/scripts/zip_dir.py" "$RC_BUILD" "$BUILD_DIR/regenerador-catalogo.zip"
+
+CS_BUILD="$BUILD_DIR/consumidora_sqs"
+mkdir -p "$CS_BUILD"
+cp "$DIR_RAIZ/backend/event_lambdas/consumidora_sqs/handler.py" "$CS_BUILD/handler.py"
+python "$DIR_RAIZ/infra/scripts/zip_dir.py" "$CS_BUILD" "$BUILD_DIR/consumidor-notificaciones.zip"
+
+echo "Subiendo a s3://$BUCKET/lambdas/..."
+aws s3 cp "$BUILD_DIR/api.zip" "s3://$BUCKET/lambdas/api.zip"
+aws s3 cp "$BUILD_DIR/post-confirmation.zip" "s3://$BUCKET/lambdas/post-confirmation.zip"
+aws s3 cp "$BUILD_DIR/regenerador-catalogo.zip" "s3://$BUCKET/lambdas/regenerador-catalogo.zip"
+aws s3 cp "$BUILD_DIR/consumidor-notificaciones.zip" "s3://$BUCKET/lambdas/consumidor-notificaciones.zip"
+

@@ -1,0 +1,315 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  API Gateway HTTP API + seis Lambdas FastAPI/Mangum.
+
+Parameters:
+  Proyecto:
+    Type: String
+    Default: adopcion-mascotas
+
+  Entorno:
+    Type: String
+    AllowedValues: [dev, prod]
+
+  CodigoS3Bucket:
+    Type: String
+    Description: Bucket con el zip de la API (backend/api), compartido por las cinco funciones.
+
+  CodigoS3KeyApi:
+    Type: String
+    Description: Key del zip dentro de CodigoS3Bucket.
+
+Resources:
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub "${Proyecto}-${Entorno}-api"
+      ProtocolType: HTTP
+
+  JwtAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref HttpApi
+      AuthorizerType: JWT
+      Name: !Sub "${Proyecto}-${Entorno}-jwt"
+      IdentitySource: ["$request.header.Authorization"]
+      JwtConfiguration:
+        Issuer: !ImportValue
+          Fn::Sub: "${Proyecto}-${Entorno}-user-pool-issuer"
+        Audience:
+          - !ImportValue
+            Fn::Sub: "${Proyecto}-${Entorno}-app-client-cliente"
+          - !ImportValue
+            Fn::Sub: "${Proyecto}-${Entorno}-app-client-guarderia"
+          - !ImportValue
+            Fn::Sub: "${Proyecto}-${Entorno}-app-client-admin"
+
+  Stage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: "$default"
+      AutoDeploy: true
+      # Techo de gasto: por encima de esto, API Gateway responde 429 en vez
+      # de seguir invocando Lambda.
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 20
+        ThrottlingRateLimit: 10
+  FnLecturaPublica:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Proyecto}-${Entorno}-lectura-publica"
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 1024
+      Timeout: 10
+      Handler: app.handlers.lectura_publica.handler
+      Role: !GetAtt RolLecturaPublica.Arn
+      Code: { S3Bucket: !Ref CodigoS3Bucket, S3Key: !Ref CodigoS3KeyApi }
+      Environment:
+        Variables:
+          TABLA_CATALOGO: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-nombre" }
+
+  LogGroupLecturaPublica:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${FnLecturaPublica}"
+      RetentionInDays: 30
+
+  PermisoApiLecturaPublica:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref FnLecturaPublica
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*"
+
+  IntegracionLecturaPublica:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt FnLecturaPublica.Arn
+      PayloadFormatVersion: "2.0"
+
+  FnEscrituraPublica:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Proyecto}-${Entorno}-escritura-publica"
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 1024
+      Timeout: 10
+      Handler: app.handlers.escritura_publica.handler
+      Role: !GetAtt RolEscrituraPublica.Arn
+      Code: { S3Bucket: !Ref CodigoS3Bucket, S3Key: !Ref CodigoS3KeyApi }
+      Environment:
+        Variables:
+          TABLA_CATALOGO: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-nombre" }
+          TABLA_SOLICITUDES: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-solicitudes-nombre" }
+          NOTIFICADOR: sqs
+          COLA_NOTIFICACIONES_URL: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-cola-notificaciones-url" }
+          # Referencia al propio HttpApi de este stack (no Fn::ImportValue):
+          # evita una dependencia circular con notificaciones.yaml, que ya
+          # depende de esta cola en sentido contrario.
+          API_BASE_URL: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+
+  LogGroupEscrituraPublica:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${FnEscrituraPublica}"
+      RetentionInDays: 30
+
+  PermisoApiEscrituraPublica:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref FnEscrituraPublica
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*"
+
+  IntegracionEscrituraPublica:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt FnEscrituraPublica.Arn
+      PayloadFormatVersion: "2.0"
+
+  RutaCrearSolicitud:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "POST /solicitudes"
+      Target: !Sub "integrations/${IntegracionEscrituraPublica}"
+
+  FnCliente:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Proyecto}-${Entorno}-cliente"
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 1024
+      Timeout: 10
+      Handler: app.handlers.cliente.handler
+      Role: !GetAtt RolCliente.Arn
+      Code: { S3Bucket: !Ref CodigoS3Bucket, S3Key: !Ref CodigoS3KeyApi }
+      Environment:
+        Variables:
+          TABLA_CATALOGO: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-nombre" }
+          TABLA_SOLICITUDES: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-solicitudes-nombre" }
+          NOTIFICADOR: sqs
+          COLA_NOTIFICACIONES_URL: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-cola-notificaciones-url" }
+          API_BASE_URL: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+          USER_POOL_ID: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-user-pool-id" }
+
+  LogGroupCliente:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${FnCliente}"
+      RetentionInDays: 30
+
+  FnGuarderia:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Proyecto}-${Entorno}-guarderia"
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 1024
+      Timeout: 10
+      Handler: app.handlers.guarderia.handler
+      Role: !GetAtt RolGuarderia.Arn
+      Code: { S3Bucket: !Ref CodigoS3Bucket, S3Key: !Ref CodigoS3KeyApi }
+      Environment:
+        Variables:
+          TABLA_CATALOGO: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-nombre" }
+          TABLA_SOLICITUDES: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-solicitudes-nombre" }
+          BUCKET_FOTOS_ORIGINALES: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-bucket-fotos-originales-nombre" }
+          BUCKET_FOTOS_DERIVADAS: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-bucket-fotos-derivadas-nombre" }
+
+  LogGroupGuarderia:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${FnGuarderia}"
+      RetentionInDays: 30
+
+  PermisoApiGuarderia:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref FnGuarderia
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*"
+
+  IntegracionGuarderia:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt FnGuarderia.Arn
+      PayloadFormatVersion: "2.0"
+  
+  FnAdmin:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Proyecto}-${Entorno}-admin"
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 1024
+      Timeout: 10
+      Handler: app.handlers.admin.handler
+      Role: !GetAtt RolAdmin.Arn
+      Code: { S3Bucket: !Ref CodigoS3Bucket, S3Key: !Ref CodigoS3KeyApi }
+      Environment:
+        Variables:
+          TABLA_CATALOGO: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-nombre" }
+
+  LogGroupAdmin:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${FnAdmin}"
+      RetentionInDays: 30
+
+  PermisoApiAdmin:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref FnAdmin
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*"
+
+  IntegracionAdmin:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt FnAdmin.Arn
+      PayloadFormatVersion: "2.0"
+
+  FnDecision:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Proyecto}-${Entorno}-decision"
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 1024
+      Timeout: 10
+      Handler: app.handlers.decision.handler
+      Role: !GetAtt RolDecision.Arn
+      Code: { S3Bucket: !Ref CodigoS3Bucket, S3Key: !Ref CodigoS3KeyApi }
+      Environment:
+        Variables:
+          TABLA_CATALOGO: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-nombre" }
+          TABLA_SOLICITUDES: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-solicitudes-nombre" }
+
+  LogGroupDecision:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${FnDecision}"
+      RetentionInDays: 30
+
+  FiltroTokenInvalido:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref LogGroupDecision
+      FilterPattern: "TOKEN_INVALIDO"
+      MetricTransformations:
+        - MetricName: TokenDecisionInvalido
+          MetricNamespace: !Sub "${Proyecto}-${Entorno}"
+          MetricValue: "1"
+
+  AlarmaTokenInvalido:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Proyecto}-${Entorno}-decision-token-invalido"
+      AlarmDescription: Varios intentos de usar un enlace de decisión con token inválido en poco tiempo.
+      Namespace: !Sub "${Proyecto}-${Entorno}"
+      MetricName: TokenDecisionInvalido
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tema-alertas-operativas-arn" }
+
+  PermisoApiDecision:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref FnDecision
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*"
+
+  IntegracionDecision:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt FnDecision.Arn
+      PayloadFormatVersion: "2.0"
+
+Outputs:
+  ApiEndpoint:
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
