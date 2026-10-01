@@ -1,6 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  Las dos tablas de datos del proyecto. 
+  Las dos tablas de datos del proyecto. `catalogo` (datos publicables, con
+  streams) y `solicitudes` (datos personales, con TTL).
 
 Parameters:
   Proyecto:
