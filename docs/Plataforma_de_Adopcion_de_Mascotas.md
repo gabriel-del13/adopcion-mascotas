@@ -1,4 +1,4 @@
-# Plataforma de Adopción de Mascotas — Contexto del Proyecto
+# Plataforma de Adopción de Mascotas - Contexto del Proyecto
 
 Documento de contexto para trabajar sobre este proyecto. Describe qué se está
 construyendo, con qué servicios de AWS, por qué se eligió cada uno y qué

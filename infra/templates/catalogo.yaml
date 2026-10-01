@@ -3,8 +3,7 @@ Description: >
   Catálogo público precalculado: bucket S3 con el JSON del catálogo y su
   manifiesto, más la Lambda regeneradora disparada por DynamoDB Streams sobre
   la tabla `catalogo`. Depende de dynamodb.yaml (importa el stream ARN). Ver
-  .dev-docs/Plataforma_de_Adopcion_de_Mascotas.md, sección 4.
-
+  .docs/Plataforma_de_Adopcion_de_Mascotas.md.
 Parameters:
   Proyecto:
     Type: String
