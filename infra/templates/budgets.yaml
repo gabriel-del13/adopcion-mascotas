@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Presupuesto mensual de la cuenta con alertas por email. Se despliega suelto, antes que cualquier otro stack
+Parameters:
+  Proyecto:
+    Type: String
+    Default: adopcion-mascotas
+
+  Entorno:
+    Type: String
+    AllowedValues: [dev, prod]
+
+  EmailAlertas:
+    Type: String
+    Description: Dirección de correo del administrador que recibe las alertas de presupuesto.
+
+  PresupuestoMensualUSD:
+    Type: Number
+    Description: Límite mensual en USD a partir del cual se avisa.
+
+Resources:
+  # Notificación por email directa, no por SNS: AWS Budgets solo admite temas
+  # SNS creados en us-east-1, mientras que las alarmas de CloudWatch
+  # viven en eu-west-1.
+  Presupuesto:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub "${Proyecto}-${Entorno}-presupuesto-mensual"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref PresupuestoMensualUSD
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref EmailAlertas
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref EmailAlertas

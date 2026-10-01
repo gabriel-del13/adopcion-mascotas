@@ -1,0 +1,79 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Bucket S3 con los zips de las Lambdas 
+Parameters:
+  Proyecto:
+    Type: String
+    Default: adopcion-mascotas
+
+  Entorno:
+    Type: String
+    AllowedValues: [dev, prod]
+
+Resources:
+  BucketArtefactos:
+    Type: AWS::S3::Bucket
+    Properties:
+      # El nombre de bucket es único a nivel global: se acota con el ID de
+      # cuenta para no chocar con otros proyectos.
+      BucketName: !Sub "${Proyecto}-${Entorno}-artefactos-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: abortar-multiparte-incompletas
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+          - Id: expirar-versiones-antiguas
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+
+  RepositorioEcrThumbnails:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${Proyecto}-${Entorno}-thumbnails"
+      # Sin esto, borrar el stack falla si el repositorio todavía tiene
+      # imágenes dentro (igual que un bucket S3 no vacío) — y siempre las
+      # tiene, porque build-thumbnails-image.sh sube una en cuanto se usa.
+      EmptyOnDelete: true
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: !Sub |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Conservar solo las 5 imágenes etiquetadas más recientes",
+                "selection": {"tagStatus": "tagged", "tagPrefixList": ["${Entorno}"], "countType": "imageCountMoreThan", "countNumber": 5},
+                "action": {"type": "expire"}
+              },
+              {
+                "rulePriority": 2,
+                "description": "Expirar imágenes sin etiquetar al día",
+                "selection": {"tagStatus": "untagged", "countType": "sinceImagePushed", "countUnit": "days", "countNumber": 1},
+                "action": {"type": "expire"}
+              }
+            ]
+          }
+
+Outputs:
+  NombreBucket:
+    Value: !Ref BucketArtefactos
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-bucket-artefactos"
+  RepositorioEcrThumbnailsUri:
+    Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${RepositorioEcrThumbnails}"
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-ecr-thumbnails-uri"
