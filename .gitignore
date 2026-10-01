@@ -1,0 +1,39 @@
+# ---- Python / backend ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+package/
+*.zip
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ---- Node / frontend ----
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+
+# ---- Entorno y secretos ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.dev-docs
+
+# ---- AWS / despliegue ----
+# Plantillas empaquetadas que genera `aws cloudformation package`.
+# Solo se sube el fuente
+infra/templates/*.packaged.yaml
+.aws-sam/
+samconfig.toml
+
+# ---- Editor y sistema ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
