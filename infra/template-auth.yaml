@@ -2,7 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: Gestión de Identidades con Amazon Cognito (RefugioCloud).
 
 Resources:
-  # 1. Directorio de Usuarios
   RefugioUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
@@ -19,18 +18,16 @@ Resources:
           RequireNumbers: true
           RequireSymbols: false
 
-  # 2. Cliente de Aplicación (Configurado para el frontend React/Vite)
   RefugioUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
-      ClientName: RefugioReactApp
+      ClientName: RefugioAppClient
       UserPoolId: !Ref RefugioUserPool
-      GenerateSecret: false # IMPORTANTE: Siempre false para Single Page Applications (SPA)
+      GenerateSecret: false
       ExplicitAuthFlows:
         - ALLOW_USER_SRP_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
 
-  # 3. Grupo de Permisos: Adoptante
   GrupoAdoptantes:
     Type: AWS::Cognito::UserPoolGroup
     Properties:
@@ -39,7 +36,6 @@ Resources:
       Precedence: 2
       UserPoolId: !Ref RefugioUserPool
 
-  # 4. Grupo de Permisos: Protectora
   GrupoProtectoras:
     Type: AWS::Cognito::UserPoolGroup
     Properties:
@@ -56,5 +52,5 @@ Outputs:
     Description: ID del Directorio de Usuarios
     Value: !Ref RefugioUserPool
   UserPoolClientId:
-    Description: ID del Cliente de Aplicación para React
+    Description: ID del Cliente de Aplicación
     Value: !Ref RefugioUserPoolClient
