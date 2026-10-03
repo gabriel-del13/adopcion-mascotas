@@ -93,39 +93,6 @@ Resources:
   # ---------------------------------------------------------------------
   # Lambda consumidora
   # ---------------------------------------------------------------------
-  RolConsumidoraNotificaciones:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub "${Proyecto}-${Entorno}-consumidora-notificaciones-rol"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal: { Service: lambda.amazonaws.com }
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: recibir-y-enviar
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action: [sqs:ReceiveMessage, sqs:DeleteMessage, sqs:GetQueueAttributes]
-                Resource: !GetAtt ColaNotificaciones.Arn
-              # SES comprueba el permiso IAM sobre TODAS las identidades que
-              # intervienen en el envío, no solo el remitente: si el
-              # destinatario también es una identidad verificada de esta
-              # cuenta, el resource-level check también se aplica sobre él. 
-              # El email de cada guardería es dato de la aplicación, 
-              # no se conoce al desplegar, así que no
-              # se puede acotar a una identidad concreta como con el
-              # remitente — de ahí el comodín, limitado a esta cuenta/región
-              # y a estas dos acciones.
-              - Effect: Allow
-                Action: [ses:SendEmail, ses:SendRawEmail]
-                Resource: !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-
   FnConsumidoraNotificaciones:
     Type: AWS::Lambda::Function
     Properties:
@@ -135,7 +102,7 @@ Resources:
       MemorySize: 256
       Timeout: 10
       Handler: handler.lambda_handler
-      Role: !GetAtt RolConsumidoraNotificaciones.Arn
+      Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
       Code:
         S3Bucket: !Ref CodigoS3Bucket
         S3Key: !Ref CodigoS3KeyConsumidora
