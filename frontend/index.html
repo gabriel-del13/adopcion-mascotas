@@ -293,6 +293,32 @@ footer{border-top:1px solid var(--line);padding:2rem 1.5rem;text-align:center;co
     <div class="stat"><strong id="stat-pendientes">0</strong><span>Solicitudes pendientes</span></div>
     <div class="stat"><strong>3</strong><span>Adopciones este mes</span></div>
   </div>
+  <hr>
+  <h3>Publicar un nuevo animal</h3>
+  <div class="auth-box" style="max-width: 100%; margin-bottom: 2rem;">
+    <form id="form-nuevo-animal" onsubmit="return publicarAnimal(event)">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+        <label>Nombre<input type="text" id="ani-nombre" required></label>
+        <label>Especie
+          <select id="ani-tipo">
+            <option value="perro">Perro</option>
+            <option value="gato">Gato</option>
+            <option value="conejo">Conejo</option>
+          </select>
+        </label>
+        <label>Raza<input type="text" id="ani-raza" required></label>
+        <label>Edad<input type="text" id="ani-edad" placeholder="Ej: 2 meses, 3 años" required></label>
+        <label>Sexo<select id="ani-sexo"><option>Macho</option><option>Hembra</option></select></label>
+        <label>Tamaño<select id="ani-tamano"><option>Pequeño</option><option>Mediano</option><option>Grande</option></select></label>
+      </div>
+      <label class="mt-3">Necesidades especiales<input type="text" id="ani-necesidad" placeholder="Ej: Ninguna necesidad especial"></label>
+      <label class="mt-3">Historia<textarea id="ani-historia" required></textarea></label>
+      <label class="mt-3">Foto principal<input type="file" id="ani-foto" accept="image/*" required></label>
+      
+      <button class="btn btn-primary btn-block mt-3" type="submit" id="btn-publicar">Guardar en la nube</button>
+    </form>
+    <p id="msg-publicar" class="msg" hidden></p>
+  </div>
   <h3>Solicitudes recibidas</h3>
   <table>
     <thead><tr><th>Adoptante</th><th>Animal</th><th>Fecha</th><th>Estado</th><th></th></tr></thead>
@@ -304,7 +330,7 @@ footer{border-top:1px solid var(--line);padding:2rem 1.5rem;text-align:center;co
 
 </main>
 
-<footer>Huellas Encontradas · prototipo estático del frontend (S3 + CloudFront)</footer>
+<footer>Huellas Encontradas · prototipo estático del frontend</footer>
 
 <script>
 // --- CONFIGURACIÓN DE LA API ---
@@ -575,4 +601,72 @@ function navAuthClick(){
 }
 
 cargarCatalogo();
+// --- PUBLICAR NUEVO ANIMAL (CONEXIÓN AWS) ---
+async function publicarAnimal(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-publicar');
+  const msg = document.getElementById('msg-publicar');
+  btn.textContent = 'Subiendo a AWS...';
+  btn.disabled = true;
+
+  try {
+    const fileInput = document.getElementById('ani-foto');
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+
+    reader.onloadend = async function() {
+      // Quitar la cabecera de base64 generada por el navegador
+      const base64String = reader.result.replace('data:', '').replace(/^.+,/, '');
+      const tipoSel = document.getElementById('ani-tipo').value;
+
+      const nuevoAnimal = {
+        name: document.getElementById('ani-nombre').value,
+        type: tipoSel,
+        icon: tipoSel === 'conejo' ? 'rabbit' : (tipoSel === 'gato' ? 'cat' : 'dog'),
+        breed: document.getElementById('ani-raza').value,
+        age: document.getElementById('ani-edad').value,
+        sex: document.getElementById('ani-sexo').value,
+        size: document.getElementById('ani-tamano').value,
+        status: 'Disponible',
+        need: document.getElementById('ani-necesidad').value || 'Ninguna',
+        story: document.getElementById('ani-historia').value,
+        fotoNombre: file.name,
+        fotoBase64: base64String
+      };
+
+      const token = localStorage.getItem('jwtToken');
+
+      // Mandar el POST a la API Gateway de tu backend
+      const response = await fetch(`${API_URL}/catalogo`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify(nuevoAnimal)
+      });
+
+      if (!response.ok) throw new Error('El backend rechazó la petición');
+
+      msg.textContent = '¡Animal publicado correctamente en la base de datos!';
+      msg.hidden = false;
+      document.getElementById('form-nuevo-animal').reset();
+      
+      // Refrescar el catálogo público para que aparezca
+      cargarCatalogo(); 
+      btn.textContent = 'Guardar en la nube';
+      btn.disabled = false;
+    };
+
+    if (file) reader.readAsDataURL(file);
+
+  } catch (error) {
+    console.error(error);
+    msg.textContent = 'Error al publicar: revisa que la sesión no haya caducado.';
+    msg.hidden = false;
+    btn.textContent = 'Guardar en la nube';
+    btn.disabled = false;
+  }
+  return false;
+}
 </script>
