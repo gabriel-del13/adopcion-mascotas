@@ -30,33 +30,6 @@ Resources:
   # invocación (más abajo) antes de poder activar su notificación, y ese
   # permiso necesita que la función ya exista.
   # ---------------------------------------------------------------------
-  RolThumbnails:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub "${Proyecto}-${Entorno}-thumbnails-rol"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal: { Service: lambda.amazonaws.com }
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: procesar-fotos
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action: [s3:GetObject, s3:DeleteObject]
-                Resource: !Sub "arn:${AWS::Partition}:s3:::${Proyecto}-${Entorno}-fotos-originales-${AWS::AccountId}/animales/*"
-              - Effect: Allow
-                Action: s3:PutObject
-                Resource: !Sub "arn:${AWS::Partition}:s3:::${Proyecto}-${Entorno}-fotos-derivadas-${AWS::AccountId}/animales/*"
-              - Effect: Allow
-                Action: dynamodb:UpdateItem
-                Resource: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-arn" }
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-
   FnThumbnails:
     Type: AWS::Lambda::Function
     Properties:
@@ -65,7 +38,7 @@ Resources:
       Architectures: [arm64]
       MemorySize: 1536
       Timeout: 30
-      Role: !GetAtt RolThumbnails.Arn
+      Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
       Code:
         ImageUri: !Ref ImagenThumbnails
       Environment:
