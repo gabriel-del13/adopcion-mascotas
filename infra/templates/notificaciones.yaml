@@ -90,15 +90,6 @@ Resources:
   # La alarma de "token inválido" no va aquí: depende del log group de
   # FnDecision, que crea api.yaml, desplegado *después* de este stack (ver
   # Description). Vive en api.yaml, importando TemaAlertasOperativasArn.
-
-  # ---------------------------------------------------------------------
-  # SES: identidad de remitente. Requiere verificación manual
-  # ---------------------------------------------------------------------
-  IdentidadSesRemitente:
-    Type: AWS::SES::EmailIdentity
-    Properties:
-      EmailIdentity: !Ref EmailRemitenteSes
-
   # ---------------------------------------------------------------------
   # Lambda consumidora
   # ---------------------------------------------------------------------
