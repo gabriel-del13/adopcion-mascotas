@@ -53,43 +53,6 @@ Resources:
             AbortIncompleteMultipartUpload:
               DaysAfterInitiation: 7
 
-  RolRegeneradorCatalogo:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub "${Proyecto}-${Entorno}-regenerador-catalogo-rol"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal: { Service: lambda.amazonaws.com }
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: leer-catalogo-y-escribir-s3
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action: [dynamodb:Query, dynamodb:Scan]
-                Resource:
-                  - !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-arn" }
-                  - !Sub
-                    - "${TablaArn}/index/*"
-                    - TablaArn: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-arn" }
-              - Effect: Allow
-                Action: s3:PutObject
-                Resource: !Sub "${BucketCatalogo.Arn}/data/*"
-              # Necesario para que el event source mapping de DynamoDB Streams
-              # pueda leer el stream (no es acceso a la tabla en sí).
-              - Effect: Allow
-                Action:
-                  - dynamodb:DescribeStream
-                  - dynamodb:GetRecords
-                  - dynamodb:GetShardIterator
-                  - dynamodb:ListStreams
-                Resource: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-stream-arn" }
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-
   FnRegeneradorCatalogo:
     Type: AWS::Lambda::Function
     Properties:
@@ -99,7 +62,7 @@ Resources:
       MemorySize: 256
       Timeout: 30
       Handler: handler.lambda_handler
-      Role: !GetAtt RolRegeneradorCatalogo.Arn
+      Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
       Code:
         S3Bucket: !Ref CodigoS3Bucket
         S3Key: !Ref CodigoS3KeyRegenerador
