@@ -307,14 +307,21 @@ footer{border-top:1px solid var(--line);padding:2rem 1.5rem;text-align:center;co
 <footer>Huellas Encontradas · prototipo estático del frontend (S3 + CloudFront)</footer>
 
 <script>
-const animals=[
-{id:1,name:'Rocco',type:'perro',icon:'dog',breed:'Mestizo',age:'3 años',sex:'Macho',size:'Grande',status:'Disponible',need:'Ninguna necesidad especial',story:'Rocco llegó al refugio hace ocho meses tras ser encontrado en una carretera. Es tranquilo, obediente y le encanta pasear largo rato. Ya sabe convivir con otros perros.'},
-{id:2,name:'Luna',type:'gato',icon:'cat',breed:'Europeo común',age:'1 año',sex:'Hembra',size:'Pequeña',status:'Urgente',need:'Requiere medicación diaria (FIV+)',story:'Luna es positiva en FIV, lo que no le impide llevar una vida normal en un hogar sin otros gatos sin vacunar. Es cariñosa y busca casa con urgencia porque el refugio está saturado.'},
-{id:3,name:'Coco',type:'conejo',icon:'rabbit',breed:'Enano',age:'8 meses',sex:'Macho',size:'Pequeña',status:'Disponible',need:'Ninguna necesidad especial',story:'Coco es curioso y activo. Necesita espacio para moverse y una dieta rica en fibra. Se lleva bien con niños tranquilos.'},
-{id:4,name:'Nube',type:'perro',icon:'dog',breed:'Galgo',age:'5 años',sex:'Hembra',size:'Grande',status:'En tránsito',need:'Ansiedad por separación',story:'Nube viene de otra protectora con más solicitudes que plazas. Es sensible y necesita una familia que no pase muchas horas fuera de casa al principio.'},
-{id:5,name:'Tigre',type:'gato',icon:'cat',breed:'Naranja común',age:'2 años',sex:'Macho',size:'Mediano',status:'Disponible',need:'Revisión veterinaria cada 6 meses',story:'Tigre es independiente pero busca compañía por las noches. Se adapta bien a pisos y le gusta dormir al sol.'},
-{id:6,name:'Pepa',type:'perro',icon:'dog',breed:'Podenco',age:'6 meses',sex:'Hembra',size:'Mediana',status:'Disponible',need:'En proceso de educación básica',story:'Pepa es cachorra, muy juguetona y está aprendiendo las normas básicas de convivencia. Ideal para una familia con tiempo para seguir su educación.'}
-];
+// --- CONFIGURACIÓN DE LA API ---
+const API_URL = 'https://51bfrf1tpk.execute-api.us-east-1.amazonaws.com';
+let animals = [];
+
+async function cargarCatalogo() {
+  try {
+    const respuesta = await fetch(`${API_URL}/catalogo`);
+    if (!respuesta.ok) throw new Error('Fallo en la red');
+    animals = await respuesta.json();
+    renderCatalog();
+  } catch (error) {
+    console.error("Error al cargar el catálogo:", error);
+    document.getElementById('catalog-grid').innerHTML = '<p class="empty">Error al conectar con la base de datos de AWS.</p>';
+  }
+}
 let solicitudes=[
 {id:1,adoptante:'Marta G.',animal:'Luna',fecha:'12/09/2026',estado:'Pendiente'},
 {id:2,adoptante:'Javier R.',animal:'Rocco',fecha:'15/09/2026',estado:'En revisión'},
@@ -443,8 +450,8 @@ function advanceEstado(id){
 
 // --- CONFIGURACIÓN DE COGNITO ---
 const poolData = {
-  UserPoolId: 'us-east-1_CPLrtrYlv', 
-  ClientId: '1kscgrad98q7ik6jv125vjvlrd'    
+  UserPoolId: 'us-east-1_wqbpR8zqb', 
+  ClientId: '2523mav2i3t4955r76sbbq34vs'    
 };
 const userPool = new AmazonCognitoIdentity.CognitoUserPool(poolData);
 let unverifiedCognitoUser = null; 
@@ -567,5 +574,5 @@ function navAuthClick(){
   }
 }
 
-renderCatalog();
+cargarCatalogo();
 </script>
