@@ -339,9 +339,9 @@ let animals = [];
 
 async function cargarCatalogo() {
   try {
-    const respuesta = await fetch(`${API_URL}/catalogo`);
-    if (!respuesta.ok) throw new Error('Fallo en la red');
-    animals = await respuesta.json();
+    const response = await fetch(`${API_URL}/animales`);
+    if (!response.ok) throw new Error('Fallo en la red');
+    animals = await response.json();
     renderCatalog();
   } catch (error) {
     console.error("Error al cargar el catálogo:", error);
@@ -641,7 +641,7 @@ async function publicarAnimal(e) {
 
     const token = localStorage.getItem('jwtToken');
 
-    const response = await fetch(`${API_URL}/catalogo`, {
+    const response = await fetch(`${API_URL}/guarderia/animales`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
