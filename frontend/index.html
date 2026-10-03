@@ -612,58 +612,59 @@ async function publicarAnimal(e) {
   try {
     const fileInput = document.getElementById('ani-foto');
     const file = fileInput.files[0];
-    const reader = new FileReader();
+    if (!file) throw new Error("Falta la foto");
 
-    reader.onloadend = async function() {
-      // Quitar la cabecera de base64 generada por el navegador
-      const base64String = reader.result.replace('data:', '').replace(/^.+,/, '');
-      const tipoSel = document.getElementById('ani-tipo').value;
+    // Esperar a que la imagen se convierta a base64
+    const base64String = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result.replace('data:', '').replace(/^.+,/, ''));
+      reader.onerror = error => reject(error);
+    });
 
-      const nuevoAnimal = {
-        name: document.getElementById('ani-nombre').value,
-        type: tipoSel,
-        icon: tipoSel === 'conejo' ? 'rabbit' : (tipoSel === 'gato' ? 'cat' : 'dog'),
-        breed: document.getElementById('ani-raza').value,
-        age: document.getElementById('ani-edad').value,
-        sex: document.getElementById('ani-sexo').value,
-        size: document.getElementById('ani-tamano').value,
-        status: 'Disponible',
-        need: document.getElementById('ani-necesidad').value || 'Ninguna',
-        story: document.getElementById('ani-historia').value,
-        fotoNombre: file.name,
-        fotoBase64: base64String
-      };
+    const tipoSel = document.getElementById('ani-tipo').value;
 
-      const token = localStorage.getItem('jwtToken');
-
-      // Mandar el POST a la API Gateway de tu backend
-      const response = await fetch(`${API_URL}/catalogo`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify(nuevoAnimal)
-      });
-
-      if (!response.ok) throw new Error('El backend rechazó la petición');
-
-      msg.textContent = '¡Animal publicado correctamente en la base de datos!';
-      msg.hidden = false;
-      document.getElementById('form-nuevo-animal').reset();
-      
-      // Refrescar el catálogo público para que aparezca
-      cargarCatalogo(); 
-      btn.textContent = 'Guardar en la nube';
-      btn.disabled = false;
+    const nuevoAnimal = {
+      name: document.getElementById('ani-nombre').value,
+      type: tipoSel,
+      icon: tipoSel === 'conejo' ? 'rabbit' : (tipoSel === 'gato' ? 'cat' : 'dog'),
+      breed: document.getElementById('ani-raza').value,
+      age: document.getElementById('ani-edad').value,
+      sex: document.getElementById('ani-sexo').value,
+      size: document.getElementById('ani-tamano').value,
+      status: 'Disponible',
+      need: document.getElementById('ani-necesidad').value || 'Ninguna',
+      story: document.getElementById('ani-historia').value,
+      fotoNombre: file.name,
+      fotoBase64: base64String
     };
 
-    if (file) reader.readAsDataURL(file);
+    const token = localStorage.getItem('jwtToken');
+
+    const response = await fetch(`${API_URL}/catalogo`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}` 
+      },
+      body: JSON.stringify(nuevoAnimal)
+    });
+
+    if (!response.ok) throw new Error(`AWS rechazó la petición con código: ${response.status}`);
+
+    msg.textContent = '¡Animal publicado correctamente en la base de datos!';
+    msg.style.color = "var(--pine)";
+    msg.hidden = false;
+    document.getElementById('form-nuevo-animal').reset();
+    
+    cargarCatalogo(); // Recarga el catálogo para mostrar el nuevo
 
   } catch (error) {
-    console.error(error);
-    msg.textContent = 'Error al publicar: revisa que la sesión no haya caducado.';
+    console.error("Fallo completo:", error);
+    msg.textContent = 'Error al publicar. Pulsa F12 (Consola) para ver los detalles.';
+    msg.style.color = "var(--rust)";
     msg.hidden = false;
+  } finally {
     btn.textContent = 'Guardar en la nube';
     btn.disabled = false;
   }
