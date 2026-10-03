@@ -462,7 +462,7 @@ function isUserProtectora(jwtToken) {
   try {
     const payload = JSON.parse(atob(jwtToken.split('.')[1]));
     const groups = payload['cognito:groups'] || [];
-    return groups.includes('Protectora');
+    return groups.includes('ADMIN') || groups.includes('GUARDERIA');
   } catch (e) {
     return false;
   }
