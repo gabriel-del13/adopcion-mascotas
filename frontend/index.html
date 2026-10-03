@@ -640,8 +640,13 @@ async function publicarAnimal(e) {
     };
 
     const token = localStorage.getItem('jwtToken');
+    
+    // 1. Decodificamos el token de Cognito para sacar tu ID de usuario (sub)
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const guarderiaId = payload.sub; // Si tu compañero usó otro campo, podría ser payload['cognito:username']
 
-    const response = await fetch(`${API_URL}/guarderia/animales`, {
+    // 2. Inyectamos ese ID dinámicamente en la ruta correcta de la Octava Ruta
+    const response = await fetch(`${API_URL}/guarderias/${guarderiaId}/animales`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
