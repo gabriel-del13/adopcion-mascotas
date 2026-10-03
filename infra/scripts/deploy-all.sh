@@ -48,7 +48,7 @@ PROYECTO="$(valor_parametro Proyecto)"
 desplegar_artefactos() {
   echo "Desplegando artefactos.yaml en $ENTORNO..."
   aws cloudformation deploy \
-    --region eu-west-1 \
+    --region us-east-1 \
     --stack-name "${PROYECTO}-${ENTORNO}-artefactos" \
     --template-file "$(ruta_windows "$DIR_RAIZ/infra/templates/artefactos.yaml")" \
     --parameter-overrides \
@@ -63,7 +63,7 @@ desplegar_budgets() {
 
   echo "Desplegando budgets.yaml en $ENTORNO (presupuesto $presupuesto USD/mes, alertas a $email_alertas)..."
   aws cloudformation deploy \
-    --region eu-west-1 \
+    --region us-east-1 \
     --stack-name "${PROYECTO}-${ENTORNO}-budgets" \
     --template-file "$(ruta_windows "$DIR_RAIZ/infra/templates/budgets.yaml")" \
     --parameter-overrides \
@@ -76,7 +76,7 @@ desplegar_budgets() {
 desplegar_dynamodb() {
   echo "Desplegando dynamodb.yaml en $ENTORNO..."
   aws cloudformation deploy \
-    --region eu-west-1 \
+    --region us-east-1 \
     --stack-name "${PROYECTO}-${ENTORNO}-dynamodb" \
     --template-file "$(ruta_windows "$DIR_RAIZ/infra/templates/dynamodb.yaml")" \
     --parameter-overrides \

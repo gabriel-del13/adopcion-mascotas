@@ -38,7 +38,7 @@ BUCKET="${PROYECTO}-${ENTORNO}-artefactos-${CUENTA}"
 
 echo "Desplegando catalogo.yaml en $ENTORNO..."
 aws cloudformation deploy \
-  --region eu-west-1 \
+  --region us-east-1 \
   --stack-name "${PROYECTO}-${ENTORNO}-catalogo" \
   --template-file "$(ruta_windows "$DIR_RAIZ/infra/templates/catalogo.yaml")" \
   --capabilities CAPABILITY_NAMED_IAM \
@@ -55,4 +55,4 @@ echo "Forzando actualización de código..."
 aws lambda update-function-code \
   --function-name "${PROYECTO}-${ENTORNO}-regenerador-catalogo" \
   --s3-bucket "$BUCKET" --s3-key "lambdas/regenerador-catalogo.zip" \
-  --region eu-west-1 --query "LastUpdateStatus" --output text
+  --region us-east-1 --query "LastUpdateStatus" --output text

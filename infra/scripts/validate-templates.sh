@@ -9,7 +9,7 @@ ESTADO=0
 for plantilla in "$DIR"/*.yaml; do
   [ -e "$plantilla" ] || continue
 
-  region="eu-west-1"
+  region="us-east-1"
   if [ "$(basename "$plantilla")" = "edge-us-east-1.yaml" ]; then
     region="us-east-1"
   fi

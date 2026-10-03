@@ -37,7 +37,7 @@ for p in params:
 
 PROYECTO="$(valor_parametro Proyecto)"
 CUENTA="$(aws sts get-caller-identity --query Account --output text)"
-REGISTRO="${CUENTA}.dkr.ecr.eu-west-1.amazonaws.com"
+REGISTRO="${CUENTA}.dkr.ecr.us-east-1.amazonaws.com"
 URI_REPO="${REGISTRO}/${PROYECTO}-${ENTORNO}-thumbnails"
 TAG="${ENTORNO}-latest"
 
@@ -45,7 +45,7 @@ echo "Registrando emulación QEMU para ARM64 (no-op si ya estaba)..."
 docker run --privileged --rm tonistiigi/binfmt --install arm64 >/dev/null
 
 echo "Iniciando sesión en ECR..."
-aws ecr get-login-password --region eu-west-1 | docker login --username AWS --password-stdin "$REGISTRO"
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "$REGISTRO"
 
 echo "Construyendo la imagen (linux/arm64) desde backend/event_lambdas/thumbnails..."
 docker buildx build \

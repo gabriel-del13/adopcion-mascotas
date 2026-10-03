@@ -40,7 +40,7 @@ BUCKET="${PROYECTO}-${ENTORNO}-artefactos-${CUENTA}"
 
 echo "Desplegando auth.yaml en $ENTORNO..."
 aws cloudformation deploy \
-  --region eu-west-1 \
+  --region us-east-1 \
   --stack-name "${PROYECTO}-${ENTORNO}-auth" \
   --template-file "$(ruta_windows "$DIR_RAIZ/infra/templates/auth.yaml")" \
   --capabilities CAPABILITY_NAMED_IAM \
@@ -52,7 +52,7 @@ aws cloudformation deploy \
 
 echo "Desplegando api.yaml en $ENTORNO..."
 aws cloudformation deploy \
-  --region eu-west-1 \
+  --region us-east-1 \
   --stack-name "${PROYECTO}-${ENTORNO}-api" \
   --template-file "$(ruta_windows "$DIR_RAIZ/infra/templates/api.yaml")" \
   --capabilities CAPABILITY_NAMED_IAM \
@@ -70,17 +70,17 @@ echo "Forzando actualización de código (CloudFormation no lo hace si el S3Key 
 aws lambda update-function-code \
   --function-name "${PROYECTO}-${ENTORNO}-post-confirmation" \
   --s3-bucket "$BUCKET" --s3-key "lambdas/post-confirmation.zip" \
-  --region eu-west-1 --query "LastUpdateStatus" --output text
+  --region us-east-1 --query "LastUpdateStatus" --output text
 for FN in lectura-publica escritura-publica cliente guarderia admin decision; do
   aws lambda update-function-code \
     --function-name "${PROYECTO}-${ENTORNO}-${FN}" \
     --s3-bucket "$BUCKET" --s3-key "lambdas/api.zip" \
-    --region eu-west-1 --query "LastUpdateStatus" --output text
+    --region us-east-1 --query "LastUpdateStatus" --output text
 done
 
 echo "Endpoint de la API:"
 aws cloudformation describe-stacks \
-  --region eu-west-1 \
+  --region us-east-1 \
   --stack-name "${PROYECTO}-${ENTORNO}-api" \
   --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
   --output text

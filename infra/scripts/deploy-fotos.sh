@@ -37,11 +37,11 @@ ruta_windows() {
 
 PROYECTO="$(valor_parametro Proyecto)"
 CUENTA="$(aws sts get-caller-identity --query Account --output text)"
-IMAGEN="${CUENTA}.dkr.ecr.eu-west-1.amazonaws.com/${PROYECTO}-${ENTORNO}-thumbnails:${ENTORNO}-latest"
+IMAGEN="${CUENTA}.dkr.ecr.us-east-1.amazonaws.com/${PROYECTO}-${ENTORNO}-thumbnails:${ENTORNO}-latest"
 
 echo "Desplegando fotos.yaml en $ENTORNO..."
 aws cloudformation deploy \
-  --region eu-west-1 \
+  --region us-east-1 \
   --stack-name "${PROYECTO}-${ENTORNO}-fotos" \
   --template-file "$(ruta_windows "$DIR_RAIZ/infra/templates/fotos.yaml")" \
   --capabilities CAPABILITY_NAMED_IAM \
@@ -56,4 +56,4 @@ echo "Forzando actualización de código..."
 aws lambda update-function-code \
   --function-name "${PROYECTO}-${ENTORNO}-thumbnails" \
   --image-uri "$IMAGEN" \
-  --region eu-west-1 --query "LastUpdateStatus" --output text
+  --region us-east-1 --query "LastUpdateStatus" --output text

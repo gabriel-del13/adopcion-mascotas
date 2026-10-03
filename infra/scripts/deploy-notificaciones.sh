@@ -39,7 +39,7 @@ BUCKET="${PROYECTO}-${ENTORNO}-artefactos-${CUENTA}"
 
 echo "Desplegando notificaciones.yaml en $ENTORNO..."
 aws cloudformation deploy \
-  --region eu-west-1 \
+  --region us-east-1 \
   --stack-name "${PROYECTO}-${ENTORNO}-notificaciones" \
   --template-file "$(ruta_windows "$DIR_RAIZ/infra/templates/notificaciones.yaml")" \
   --capabilities CAPABILITY_NAMED_IAM \
@@ -58,6 +58,6 @@ echo "Forzando actualización de código..."
 aws lambda update-function-code \
   --function-name "${PROYECTO}-${ENTORNO}-consumidora-notificaciones" \
   --s3-bucket "$BUCKET" --s3-key "lambdas/consumidor-notificaciones.zip" \
-  --region eu-west-1 --query "LastUpdateStatus" --output text
+  --region us-east-1 --query "LastUpdateStatus" --output text
 
 echo "IMPORTANTE: revisa la bandeja de $(valor_parametro EmailRemitenteSes) y confirma el correo de verificación de SES antes de enviar de verdad."
