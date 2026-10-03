@@ -24,41 +24,7 @@ Parameters:
 
 Resources:
   # --- Permisos del trigger de Post Confirmation ---
-  RolPostConfirmation:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub "${Proyecto}-${Entorno}-post-confirmation-rol"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: escritura-tablas
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action: dynamodb:PutItem
-                Resource:
-                  - !ImportValue
-                    Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-arn"
-                  - !ImportValue
-                    Fn::Sub: "${Proyecto}-${Entorno}-tabla-solicitudes-arn"
-              # No se puede usar !GetAtt UserPool.Arn aquí: crearía un ciclo,
-              # porque el propio User Pool depende de esta función a través de
-              # LambdaConfig.PostConfirmation. Se acota por cuenta y región en
-              # su lugar; en esta cuenta solo existe este User Pool.
-              - Effect: Allow
-                Action:
-                  - cognito-idp:AdminAddUserToGroup
-                  - cognito-idp:DescribeUserPoolClient
-                Resource: !Sub "arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*"
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-
+  
   FnPostConfirmation:
     Type: AWS::Lambda::Function
     Properties:
@@ -68,7 +34,7 @@ Resources:
       MemorySize: 256
       Timeout: 10
       Handler: handler.lambda_handler
-      Role: !GetAtt RolPostConfirmation.Arn
+      Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
       Code:
         S3Bucket: !Ref CodigoS3Bucket
         S3Key: !Ref CodigoS3KeyPostConfirmation
