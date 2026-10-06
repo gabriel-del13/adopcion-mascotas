@@ -314,7 +314,14 @@ footer{border-top:1px solid var(--line);padding:2rem 1.5rem;text-align:center;co
           </select>
         </label>
         <label>Raza<input type="text" id="ani-raza" required></label>
-        <label>Edad<input type="text" id="ani-edad" placeholder="Ej: 2 meses, 3 años" required></label>
+        <label>Edad
+          <select id="ani-edad">
+            <option value="cachorro">Cachorro</option>
+            <option value="joven">Joven</option>
+            <option value="adulto">Adulto</option>
+            <option value="senior">Senior</option>
+          </select>
+        </label>
         <label>Sexo<select id="ani-sexo"><option>Macho</option><option>Hembra</option></select></label>
         <label>Tamaño<select id="ani-tamano"><option>Pequeño</option><option>Mediano</option><option>Grande</option></select></label>
         <label>Provincia<input type="text" id="ani-provincia" placeholder="Ej: Madrid" required></label>
