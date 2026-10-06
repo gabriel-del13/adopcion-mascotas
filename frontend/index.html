@@ -598,6 +598,7 @@ function executeAuth(e) {
         if (nuevaClave) {
           delete userAttributes.email_verified; 
           delete userAttributes.phone_number_verified;
+          delete userAttributes.email;
           
           cognitoUser.completeNewPasswordChallenge(nuevaClave, userAttributes, this);
         } else {
