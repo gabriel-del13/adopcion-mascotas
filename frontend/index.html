@@ -317,6 +317,8 @@ footer{border-top:1px solid var(--line);padding:2rem 1.5rem;text-align:center;co
         <label>Edad<input type="text" id="ani-edad" placeholder="Ej: 2 meses, 3 años" required></label>
         <label>Sexo<select id="ani-sexo"><option>Macho</option><option>Hembra</option></select></label>
         <label>Tamaño<select id="ani-tamano"><option>Pequeño</option><option>Mediano</option><option>Grande</option></select></label>
+        <label>Provincia<input type="text" id="ani-provincia" placeholder="Ej: Madrid" required></label>
+        <label>Ciudad<input type="text" id="ani-ciudad" placeholder="Ej: Getafe" required></label>
       </div>
       <label class="mt-3">Necesidades especiales<input type="text" id="ani-necesidad" placeholder="Ej: Ninguna necesidad especial"></label>
       <label class="mt-3">Historia<textarea id="ani-historia" required></textarea></label>
@@ -634,7 +636,6 @@ async function publicarAnimal(e) {
     const file = fileInput.files[0];
     if (!file) throw new Error("Falta la foto");
 
-    // Esperar a que la imagen se convierta a base64
     const base64String = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -645,16 +646,18 @@ async function publicarAnimal(e) {
     const tipoSel = document.getElementById('ani-tipo').value;
 
     const nuevoAnimal = {
-      name: document.getElementById('ani-nombre').value,
-      type: tipoSel,
+      nombre: document.getElementById('ani-nombre').value,
+      tipo: tipoSel,
       icon: tipoSel === 'conejo' ? 'rabbit' : (tipoSel === 'gato' ? 'cat' : 'dog'),
-      breed: document.getElementById('ani-raza').value,
-      age: document.getElementById('ani-edad').value,
-      sex: document.getElementById('ani-sexo').value,
-      size: document.getElementById('ani-tamano').value,
-      status: 'Disponible',
-      need: document.getElementById('ani-necesidad').value || 'Ninguna',
-      story: document.getElementById('ani-historia').value,
+      raza: document.getElementById('ani-raza').value,
+      edad: document.getElementById('ani-edad').value,
+      sexo: document.getElementById('ani-sexo').value,
+      tamano: document.getElementById('ani-tamano').value,
+      estado: 'Disponible',
+      necesidades: document.getElementById('ani-necesidad').value || 'Ninguna',
+      descripcion: document.getElementById('ani-historia').value,
+      provincia: document.getElementById('ani-provincia').value, // <--- CAMPO NUEVO
+      ciudad: document.getElementById('ani-ciudad').value, // <--- CAMPO NUEVO
       fotoNombre: file.name,
       fotoBase64: base64String
     };
