@@ -588,7 +588,23 @@ function executeAuth(e) {
             showView('home'); 
         }
       },
-      onFailure: function (err) { msg.textContent = err.message || 'Error de inicio de sesión'; msg.hidden = false; }
+      onFailure: function (err) { 
+        msg.textContent = err.message || 'Error de inicio de sesión'; 
+        msg.hidden = false; 
+      },
+      newPasswordRequired: function(userAttributes, requiredAttributes) {
+        const nuevaClave = prompt("Seguridad de AWS: Es tu primer inicio de sesión como Admin. Introduce tu nueva contraseña definitiva (mínimo 8 caracteres, números, etc.):");
+        
+        if (nuevaClave) {
+          delete userAttributes.email_verified; 
+          delete userAttributes.phone_number_verified;
+          
+          cognitoUser.completeNewPasswordChallenge(nuevaClave, userAttributes, this);
+        } else {
+          msg.textContent = 'Cambio de contraseña cancelado. Es obligatorio para entrar.'; 
+          msg.hidden = false;
+        }
+      }
     });
 
 } else if (authMode === 'register') {
