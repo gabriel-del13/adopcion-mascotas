@@ -258,7 +258,14 @@ footer{border-top:1px solid var(--line);padding:2rem 1.5rem;text-align:center;co
         </p>
       </div>
       
-      <div id="fields-register" hidden></div>
+      <div id="fields-register" hidden class="mt-3">
+        <label>¿Cómo quieres registrarte?
+          <select id="tipo-cuenta">
+            <option value="cliente">Busco adoptar (Cliente)</option>
+            <option value="guarderia">Soy una protectora (Guardería)</option>
+          </select>
+        </label>
+      </div>
 
       <!-- Verificación de nueva cuenta -->
       <div id="fields-verify" hidden class="mt-3">
@@ -542,11 +549,24 @@ function executeAuth(e) {
       onFailure: function (err) { msg.textContent = err.message || 'Error de inicio de sesión'; msg.hidden = false; }
     });
 
-  } else if (authMode === 'register') {
+} else if (authMode === 'register') {
+    const tipoCuenta = document.getElementById('tipo-cuenta').value;
+    
+    const clientIdActivo = (tipoCuenta === 'guarderia') 
+      ? '18t3f9cdl6o4eend714bfghc6m'  // App Client de Guardería
+      : '2523mav2i3t4955r76sbbq34vs'; // App Client de Cliente
+
+    const registerPool = new AmazonCognitoIdentity.CognitoUserPool({
+      UserPoolId: 'us-east-1_wqbpR8zqb',
+      ClientId: clientIdActivo
+    });
+
     const attributeList = [new AmazonCognitoIdentity.CognitoUserAttribute({ Name: 'email', Value: email })];
-    userPool.signUp(email, password, attributeList, null, function(err, result) {
+    
+    registerPool.signUp(email, password, attributeList, null, function(err, result) {
       if (err) { msg.textContent = err.message || 'Error al registrar'; msg.hidden = false; return; }
-      unverifiedCognitoUser = result.user;
+      
+      unverifiedCognitoUser = result.user; 
       setMode('verify'); 
     });
 
