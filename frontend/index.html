@@ -344,6 +344,23 @@ footer{border-top:1px solid var(--line);padding:2rem 1.5rem;text-align:center;co
   <div id="mensajes-list"></div>
 </section>
 
+<section id="view-superadmin" class="view" hidden>
+  <h2>Panel de Super Administrador</h2>
+  <p>Gestión de nuevas protectoras dadas de alta en la plataforma.</p>
+  <h3>Guarderías Pendientes de Aprobación</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>ID de la Guardería (Sub)</th>
+        <th>Acción</th>
+      </tr>
+    </thead>
+    <tbody id="lista-guarderias-pendientes">
+      <!-- Se llenará con JavaScript -->
+    </tbody>
+  </table>
+</section>
+
 </main>
 
 <footer>Huellas Encontradas · prototipo estático del frontend</footer>
@@ -499,14 +516,15 @@ const userPool = new AmazonCognitoIdentity.CognitoUserPool(poolData);
 let unverifiedCognitoUser = null; 
 
 // --- FUNCIONES AUXILIARES ---
-// Decodifica el Token JWT para ver si el usuario pertenece al grupo "Protectora"
-function isUserProtectora(jwtToken) {
+function getRolUsuario(jwtToken) {
   try {
     const payload = JSON.parse(atob(jwtToken.split('.')[1]));
     const groups = payload['cognito:groups'] || [];
-    return groups.includes('ADMIN') || groups.includes('GUARDERIA');
+    if (groups.includes('ADMIN')) return 'ADMIN';
+    if (groups.includes('GUARDERIA')) return 'GUARDERIA';
+    return 'CLIENTE';
   } catch (e) {
-    return false;
+    return 'CLIENTE';
   }
 }
 
@@ -549,11 +567,26 @@ function executeAuth(e) {
       onSuccess: function (result) {
         const accessToken = result.getAccessToken().getJwtToken();
         localStorage.setItem('jwtToken', accessToken); 
-        const isProtectora = isUserProtectora(accessToken);
+        
+        const rol = getRolUsuario(accessToken);
         document.getElementById('nav-auth').textContent = 'Cerrar sesión';
-        document.getElementById('nav-panel').hidden = !isProtectora; 
-        if (isProtectora) { renderAdmin(); showView('admin'); } 
-        else { msg.textContent = 'Sesión iniciada correctamente.'; msg.hidden = false; showView('home'); }
+        
+        if (rol === 'ADMIN') {
+            document.getElementById('nav-panel').hidden = false;
+            document.getElementById('nav-panel').onclick = () => showView('superadmin');
+            cargarGuarderiasPendientes();
+            showView('superadmin');
+        } else if (rol === 'GUARDERIA') {
+            document.getElementById('nav-panel').hidden = false;
+            document.getElementById('nav-panel').onclick = () => showView('admin');
+            renderAdmin(); 
+            showView('admin');
+        } else {
+            document.getElementById('nav-panel').hidden = true;
+            msg.textContent = 'Sesión iniciada correctamente.'; 
+            msg.hidden = false; 
+            showView('home'); 
+        }
       },
       onFailure: function (err) { msg.textContent = err.message || 'Error de inicio de sesión'; msg.hidden = false; }
     });
@@ -704,5 +737,56 @@ async function publicarAnimal(e) {
     btn.disabled = false;
   }
   return false;
+}
+
+// --- FUNCIONES DEL SUPER ADMINISTRADOR ---
+async function cargarGuarderiasPendientes() {
+  const token = localStorage.getItem('jwtToken');
+  try {
+    const response = await fetch(`${API_URL}/admin/guarderias/pendientes`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (!response.ok) throw new Error('Fallo al obtener pendientes');
+    const pendientes = await response.json();
+    
+    const tbody = document.getElementById('lista-guarderias-pendientes');
+    
+    if (pendientes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="2">No hay guarderías pendientes.</td></tr>';
+        return;
+    }
+
+    // Suponemos que la API devuelve un array de objetos con el campo "sub"
+    tbody.innerHTML = pendientes.map(g => `
+      <tr>
+        <td style="font-family: monospace;">${g.sub || g.id || JSON.stringify(g)}</td>
+        <td>
+          <button class="btn-small btn-primary" onclick="aprobarGuarderia('${g.sub || g.id}')">Aprobar protectora</button>
+        </td>
+      </tr>
+    `).join('');
+  } catch (error) {
+    console.error("Error cargando guarderías pendientes:", error);
+  }
+}
+
+async function aprobarGuarderia(sub) {
+  const token = localStorage.getItem('jwtToken');
+  try {
+    const response = await fetch(`${API_URL}/admin/guarderias/${sub}/aprobar`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (!response.ok) throw new Error('Fallo al aprobar');
+    
+    alert('¡Protectora aprobada con éxito!');
+    cargarGuarderiasPendientes(); // Recarga la tabla para que desaparezca
+  } catch (error) {
+    console.error("Error al aprobar:", error);
+    alert('Hubo un error al intentar aprobar la guardería.');
+  }
 }
 </script>
