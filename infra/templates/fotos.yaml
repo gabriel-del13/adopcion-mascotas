@@ -2,12 +2,11 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Fotos de animales: bucket de originales (destino de las subidas
   presignadas), bucket de derivadas (miniaturas generadas) y Lambda de
-  thumbnails (imagen de contenedor, Pillow) disparada por el evento de
-  subida. Depende de dynamodb.yaml (ARN de la tabla catalogo) y de
-  artefactos.yaml (URI de la imagen ya subida a ECR: el repositorio vive ahí,
-  no aquí, para evitar repetición — ver artefactos.yaml). Nada de
-  api.yaml: es quien importa de aquí (permisos S3 de RolGuarderia), así que
-  la dependencia inversa crearía un ciclo.
+  thumbnails (Pillow) disparada por el evento de subida. 
+  Depende de dynamodb.yaml (ARN de la tabla catalogo) y 
+  de artefactos.yaml (bucket con el zip que sube build-lambdas.sh). 
+  Nada de api.yaml: es quien importa de aquí (permisos S3 de RolGuarderia), 
+  así que la dependencia inversa crearía un ciclo.
 
 Parameters:
   Proyecto:
@@ -18,11 +17,13 @@ Parameters:
     Type: String
     AllowedValues: [dev, prod]
 
-  ImagenThumbnails:
+  CodigoS3Bucket:
     Type: String
-    Description: >
-      URI completa de la imagen en ECR (repositorio:tag) que deja
-      build-thumbnails-image.sh, sobre el repositorio de artefactos.yaml.
+    Description: Bucket con el zip de la Lambda de thumbnails.
+
+  CodigoS3KeyThumbnails:
+    Type: String
+    Description: Key del zip dentro de CodigoS3Bucket.
 
 Resources:
   # ---------------------------------------------------------------------
@@ -61,13 +62,13 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub "${Proyecto}-${Entorno}-thumbnails"
-      PackageType: Image
+      Runtime: python3.12
       Architectures: [arm64]
       MemorySize: 1536
       Timeout: 30
+      Handler: handler.lambda_handler
       Role: !GetAtt RolThumbnails.Arn
-      Code:
-        ImageUri: !Ref ImagenThumbnails
+      Code: { S3Bucket: !Ref CodigoS3Bucket, S3Key: !Ref CodigoS3KeyThumbnails }
       Environment:
         Variables:
           BUCKET_FOTOS_DERIVADAS: !Sub "${Proyecto}-${Entorno}-fotos-derivadas-${AWS::AccountId}"
