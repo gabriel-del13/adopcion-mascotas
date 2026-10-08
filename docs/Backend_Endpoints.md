@@ -12,13 +12,17 @@ no el detalle de cada payload.
 despliegue y ya no responden, te los dejo de muestra:
 
 ```
-Base URL:        https://3exbh6sz27.execute-api.eu-west-1.amazonaws.com  (muerto)
-Cognito Pool ID: eu-west-1_1nHy5snnV                                     (muerto)
+Base URL:        https://3exbh6sz27.execute-api.eu-west-1.amazonaws.com/dev  (muerto)
+Cognito Pool ID: eu-west-1_1nHy5snnV                                         (muerto)
 App Client CLIENTE:    96iets4j65uuusssbm76mdo8v
 App Client GUARDERIA:  36457etqg28poief3ug8tfpbh8
 App Client ADMIN:      2omoqa06q09pisf9mar0qnqkk1
 ```
 
+**Cambio de formato de la Base URL:** ahora lleva el entorno al final
+(`/dev` o `/prod`). Antes no lo llevaba porque la API era un API Gateway HTTP
+API con stage `$default`; ahora es un REST API con stage nombrado, y REST API
+no tiene equivalente a `$default`s
 ---
 
 ## Autenticación

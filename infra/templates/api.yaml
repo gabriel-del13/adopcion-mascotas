@@ -1,11 +1,12 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  API Gateway HTTP API + seis Lambdas FastAPI/Mangum, separadas por frontera
-  de permisos IAM (no por endpoint). Las seis comparten el mismo paquete zip
-  (backend/api) y solo cambia el Handler de cada una. Depende de
-  dynamodb.yaml, auth.yaml (importa tablas y User Pool), notificaciones.yaml
-  (importa la cola y el tema de alertas) y fotos.yaml (importa los dos
-  buckets de fotos).
+  API Gateway REST API + seis Lambdas, separadas
+  por frontera de permisos IAM (no por endpoint). Autorización con el
+  Authorizer nativo COGNITO_USER_POOLS, adjunto por método individual (no
+  globalmente). Las seis Lambdas comparten el mismo paquete zip (backend/api)
+  y solo cambia el Handler de cada una. Depende de dynamodb.yaml, auth.yaml
+  (importa el User Pool), notificaciones.yaml (importa la cola y el tema de
+  alertas) y fotos.yaml (importa los dos buckets de fotos).
 
 Parameters:
   Proyecto:
@@ -18,7 +19,7 @@ Parameters:
 
   CodigoS3Bucket:
     Type: String
-    Description: Bucket con el zip de la API (backend/api), compartido por las cinco funciones.
+    Description: Bucket con el zip de la API (backend/api), compartido por las seis funciones.
 
   CodigoS3KeyApi:
     Type: String
@@ -26,43 +27,24 @@ Parameters:
 
 Resources:
   # ---------------------------------------------------------------------
-  # API Gateway HTTP API + autorizador JWT contra el User Pool
+  # API Gateway REST API + Authorizer nativo de Cognito
   # ---------------------------------------------------------------------
-  HttpApi:
-    Type: AWS::ApiGatewayV2::Api
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
     Properties:
       Name: !Sub "${Proyecto}-${Entorno}-api"
-      ProtocolType: HTTP
+      EndpointConfiguration:
+        Types: [REGIONAL]
 
-  JwtAuthorizer:
-    Type: AWS::ApiGatewayV2::Authorizer
+  AutorizadorCognito:
+    Type: AWS::ApiGateway::Authorizer
     Properties:
-      ApiId: !Ref HttpApi
-      AuthorizerType: JWT
-      Name: !Sub "${Proyecto}-${Entorno}-jwt"
-      IdentitySource: ["$request.header.Authorization"]
-      JwtConfiguration:
-        Issuer: !ImportValue
-          Fn::Sub: "${Proyecto}-${Entorno}-user-pool-issuer"
-        Audience:
-          - !ImportValue
-            Fn::Sub: "${Proyecto}-${Entorno}-app-client-cliente"
-          - !ImportValue
-            Fn::Sub: "${Proyecto}-${Entorno}-app-client-guarderia"
-          - !ImportValue
-            Fn::Sub: "${Proyecto}-${Entorno}-app-client-admin"
-
-  Stage:
-    Type: AWS::ApiGatewayV2::Stage
-    Properties:
-      ApiId: !Ref HttpApi
-      StageName: "$default"
-      AutoDeploy: true
-      # Techo de gasto: por encima de esto, API Gateway responde 429 en vez
-      # de seguir invocando Lambda.
-      DefaultRouteSettings:
-        ThrottlingBurstLimit: 20
-        ThrottlingRateLimit: 10
+      Name: !Sub "${Proyecto}-${Entorno}-cognito"
+      RestApiId: !Ref RestApi
+      Type: COGNITO_USER_POOLS
+      IdentitySource: method.request.header.Authorization
+      ProviderARNs:
+        - !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-user-pool-arn" }
 
   # ---------------------------------------------------------------------
   # Pública de lectura: catálogo y fichas. Sin autenticación, solo lectura.
@@ -119,36 +101,7 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref FnLecturaPublica
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*"
-
-  IntegracionLecturaPublica:
-    Type: AWS::ApiGatewayV2::Integration
-    Properties:
-      ApiId: !Ref HttpApi
-      IntegrationType: AWS_PROXY
-      IntegrationUri: !GetAtt FnLecturaPublica.Arn
-      PayloadFormatVersion: "2.0"
-
-  RutaListarAnimales:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "GET /animales"
-      Target: !Sub "integrations/${IntegracionLecturaPublica}"
-
-  RutaFichaAnimal:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "GET /animales/{animal_id}"
-      Target: !Sub "integrations/${IntegracionLecturaPublica}"
-
-  RutaListarGuarderias:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "GET /guarderias"
-      Target: !Sub "integrations/${IntegracionLecturaPublica}"
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*/*"
 
   # ---------------------------------------------------------------------
   # Pública de escritura: crear solicitud anónima. Sin autenticación (la
@@ -210,10 +163,10 @@ Resources:
           TABLA_SOLICITUDES: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-solicitudes-nombre" }
           NOTIFICADOR: sqs
           COLA_NOTIFICACIONES_URL: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-cola-notificaciones-url" }
-          # Referencia al propio HttpApi de este stack (no Fn::ImportValue):
+          # Referencia al propio RestApi de este stack (no Fn::ImportValue):
           # evita una dependencia circular con notificaciones.yaml, que ya
-          # depende de esta cola en sentido contrario.
-          API_BASE_URL: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+          # depende de esta cola en sentido contrario.s
+          API_BASE_URL: !Sub "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${Entorno}"
 
   LogGroupEscrituraPublica:
     Type: AWS::Logs::LogGroup
@@ -227,26 +180,10 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref FnEscrituraPublica
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*"
-
-  IntegracionEscrituraPublica:
-    Type: AWS::ApiGatewayV2::Integration
-    Properties:
-      ApiId: !Ref HttpApi
-      IntegrationType: AWS_PROXY
-      IntegrationUri: !GetAtt FnEscrituraPublica.Arn
-      PayloadFormatVersion: "2.0"
-
-  RutaCrearSolicitud:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "POST /solicitudes"
-      Target: !Sub "integrations/${IntegracionEscrituraPublica}"
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*/*"
 
   # ---------------------------------------------------------------------
-  # Privada de cliente: perfil e historial. JWT + grupo CLIENTE (comprobado
-  # en el código, IAM solo llega hasta la tabla y el índice).
+  # Privada de cliente: perfil e historial. Cognito nativo + grupo CLIENTE
   # ---------------------------------------------------------------------
   RolCliente:
     Type: AWS::IAM::Role
@@ -306,7 +243,7 @@ Resources:
           TABLA_SOLICITUDES: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-solicitudes-nombre" }
           NOTIFICADOR: sqs
           COLA_NOTIFICACIONES_URL: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-cola-notificaciones-url" }
-          API_BASE_URL: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+          API_BASE_URL: !Sub "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${Entorno}"
           USER_POOL_ID: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-user-pool-id" }
 
   LogGroupCliente:
@@ -315,70 +252,17 @@ Resources:
       LogGroupName: !Sub "/aws/lambda/${FnCliente}"
       RetentionInDays: 30
 
-  PermisoApiCliente:
+  PermisoApiCliente:ss
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !Ref FnCliente
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*"
-
-  IntegracionCliente:
-    Type: AWS::ApiGatewayV2::Integration
-    Properties:
-      ApiId: !Ref HttpApi
-      IntegrationType: AWS_PROXY
-      IntegrationUri: !GetAtt FnCliente.Arn
-      PayloadFormatVersion: "2.0"
-
-  RutaObtenerPerfilCliente:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "GET /cliente/perfil"
-      Target: !Sub "integrations/${IntegracionCliente}"
-      AuthorizationType: JWT
-      AuthorizerId: !Ref JwtAuthorizer
-
-  RutaActualizarPerfilCliente:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "PUT /cliente/perfil"
-      Target: !Sub "integrations/${IntegracionCliente}"
-      AuthorizationType: JWT
-      AuthorizerId: !Ref JwtAuthorizer
-
-  RutaHistorialCliente:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "GET /cliente/solicitudes"
-      Target: !Sub "integrations/${IntegracionCliente}"
-      AuthorizationType: JWT
-      AuthorizerId: !Ref JwtAuthorizer
-
-  RutaCrearSolicitudCliente:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "POST /cliente/solicitudes"
-      Target: !Sub "integrations/${IntegracionCliente}"
-      AuthorizationType: JWT
-      AuthorizerId: !Ref JwtAuthorizer
-
-  RutaBorrarCuentaCliente:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "DELETE /cliente"
-      Target: !Sub "integrations/${IntegracionCliente}"
-      AuthorizationType: JWT
-      AuthorizerId: !Ref JwtAuthorizer
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*/*"
 
   # ---------------------------------------------------------------------
-  # Privada de guardería: publicar animales, ver solicitudes recibidas. JWT +
-  # grupo GUARDERIA, y la aprobación (estado APROBADA) se comprueba en código.
+  # Privada de guardería: publicar animales, ver solicitudes recibidas.
+  # Cognito nativo + grupo GUARDERIA, y la aprobación (estado APROBADA)ss
   # ---------------------------------------------------------------------
   RolGuarderia:
     Type: AWS::IAM::Role
@@ -463,90 +347,10 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref FnGuarderia
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*"
-
-  IntegracionGuarderia:
-    Type: AWS::ApiGatewayV2::Integration
-    Properties:
-      ApiId: !Ref HttpApi
-      IntegrationType: AWS_PROXY
-      IntegrationUri: !GetAtt FnGuarderia.Arn
-      PayloadFormatVersion: "2.0"
-
-  RutaCrearAnimal:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "POST /guarderias/{guarderia_id}/animales"
-      Target: !Sub "integrations/${IntegracionGuarderia}"
-      AuthorizationType: JWT
-      AuthorizerId: !Ref JwtAuthorizer
-
-  RutaActualizarPerfilGuarderia:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "PUT /guarderia/perfil"
-      Target: !Sub "integrations/${IntegracionGuarderia}"
-      AuthorizationType: JWT
-      AuthorizerId: !Ref JwtAuthorizer
-
-  RutaEditarAnimal:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "PUT /guarderias/{guarderia_id}/animales/{animal_id}"
-      Target: !Sub "integrations/${IntegracionGuarderia}"
-      AuthorizationType: JWT
-      AuthorizerId: !Ref JwtAuthorizer
-
-  RutaEliminarAnimal:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "DELETE /guarderias/{guarderia_id}/animales/{animal_id}"
-      Target: !Sub "integrations/${IntegracionGuarderia}"
-      AuthorizationType: JWT
-      AuthorizerId: !Ref JwtAuthorizer
-
-  RutaSubirFoto:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "POST /guarderias/{guarderia_id}/animales/{animal_id}/fotos"
-      Target: !Sub "integrations/${IntegracionGuarderia}"
-      AuthorizationType: JWT
-      AuthorizerId: !Ref JwtAuthorizer
-
-  RutaListarSolicitudesGuarderia:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "GET /guarderias/{guarderia_id}/solicitudes"
-      Target: !Sub "integrations/${IntegracionGuarderia}"
-      AuthorizationType: JWT
-      AuthorizerId: !Ref JwtAuthorizer
-
-  RutaAceptarSolicitud:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "POST /guarderias/{guarderia_id}/solicitudes/{animal_id}/aceptar"
-      Target: !Sub "integrations/${IntegracionGuarderia}"
-      AuthorizationType: JWT
-      AuthorizerId: !Ref JwtAuthorizer
-
-  RutaRechazarSolicitud:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "POST /guarderias/{guarderia_id}/solicitudes/{animal_id}/rechazar"
-      Target: !Sub "integrations/${IntegracionGuarderia}"
-      AuthorizationType: JWT
-      AuthorizerId: !Ref JwtAuthorizer
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*/*"
 
   # ---------------------------------------------------------------------
-  # Administrativa: aprobar/rechazar guarderías. JWT + grupo ADMIN.
+  # Administrativa: aprobar/rechazar guarderías. Cognito nativo + grupo ADMIN.
   # ---------------------------------------------------------------------
   RolAdmin:
     Type: AWS::IAM::Role
@@ -602,48 +406,14 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref FnAdmin
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*"
-
-  IntegracionAdmin:
-    Type: AWS::ApiGatewayV2::Integration
-    Properties:
-      ApiId: !Ref HttpApi
-      IntegrationType: AWS_PROXY
-      IntegrationUri: !GetAtt FnAdmin.Arn
-      PayloadFormatVersion: "2.0"
-
-  RutaListarGuarderiasPendientes:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "GET /admin/guarderias/pendientes"
-      Target: !Sub "integrations/${IntegracionAdmin}"
-      AuthorizationType: JWT
-      AuthorizerId: !Ref JwtAuthorizer
-
-  RutaAprobarGuarderia:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "POST /admin/guarderias/{sub}/aprobar"
-      Target: !Sub "integrations/${IntegracionAdmin}"
-      AuthorizationType: JWT
-      AuthorizerId: !Ref JwtAuthorizer
-
-  RutaRechazarGuarderia:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "POST /admin/guarderias/{sub}/rechazar"
-      Target: !Sub "integrations/${IntegracionAdmin}"
-      AuthorizationType: JWT
-      AuthorizerId: !Ref JwtAuthorizer
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*/*"
 
   # ---------------------------------------------------------------------
   # Decisión de solicitud: enlaces de aceptar/rechazar del correo a la
-  # guardería. Sin JWT: la autorización es un token de un solo uso que
-  # verifica el propio código. Permisos mínimos y distintos de los cinco anteriores: nada
-  # de Scan/Query, solo las claves exactas de una solicitud y de un animal
+  # guardería. Sin Cognito: la autorización es un token de un solo uso que
+  # verifica el propio código. Permisos mínimos y distintos de los cinco
+  # anteriores: nada de Scan/Query, solo las claves exactas de una solicitud
+  # y de un animal
   # ---------------------------------------------------------------------
   RolDecision:
     Type: AWS::IAM::Role
@@ -692,7 +462,7 @@ Resources:
       RetentionInDays: 30
 
   # Alarma sobre los intentos con token inválido. Va aquí, no en notificaciones.yaml, porque depende del log
-  # group de FnDecision, creado justo arriba — notificaciones.yaml se
+  # group de FnDecision, creado justo arriba - notificaciones.yaml se
   # despliega antes que este stack.
   FiltroTokenInvalido:
     Type: AWS::Logs::MetricFilter
@@ -726,30 +496,952 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref FnDecision
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*"
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*/*"
 
-  IntegracionDecision:
-    Type: AWS::ApiGatewayV2::Integration
-    Properties:
-      ApiId: !Ref HttpApi
-      IntegrationType: AWS_PROXY
-      IntegrationUri: !GetAtt FnDecision.Arn
-      PayloadFormatVersion: "2.0"
+  # =======================================================================
+  # El árbol de recursos REST API. Un AWS::ApiGateway::Resource por segmento de
+  # path, compartido entre Lambdas distintas cuando corresponde (p.ej.
+  # ResGuarderias es padre tanto de GET /guarderias de FnLecturaPublica como
+  # de {guarderia_id}/animales de FnGuarderia). CORS (fase pendient) se implementa con un método
+  # OPTIONS + integración MOCK por cada recurso con al menos un método real
+  # =======================================================================
 
-  RutaMostrarDecision:
-    Type: AWS::ApiGatewayV2::Route
+  # ----- /animales, /animales/{animal_id} (FnLecturaPublica) -----
+  ResAnimales:
+    Type: AWS::ApiGateway::Resource
     Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "GET /decision"
-      Target: !Sub "integrations/${IntegracionDecision}"
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: animales
 
-  RutaConfirmarDecision:
-    Type: AWS::ApiGatewayV2::Route
+  MetodoListarAnimales:
+    Type: AWS::ApiGateway::Method
     Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: "POST /decision"
-      Target: !Sub "integrations/${IntegracionDecision}"
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResAnimales
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnLecturaPublica.Arn}/invocations"
+
+  MetodoOpcionesAnimales:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResAnimales
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: { application/json: '{"statusCode": 200}' }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'authorization,content-type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  ResAnimalId:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResAnimales
+      PathPart: "{animal_id}"
+
+  MetodoObtenerAnimal:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResAnimalId
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnLecturaPublica.Arn}/invocations"
+
+  MetodoOpcionesAnimalId:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResAnimalId
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: { application/json: '{"statusCode": 200}' }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'authorization,content-type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  # ----- /guarderias (FnLecturaPublica: GET) -----
+  ResGuarderias:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: guarderias
+
+  MetodoListarGuarderias:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResGuarderias
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnLecturaPublica.Arn}/invocations"
+
+  MetodoOpcionesGuarderias:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResGuarderias
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: { application/json: '{"statusCode": 200}' }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'authorization,content-type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  # ----- /guarderias/{guarderia_id}/... (FnGuarderia) -----
+  ResGuarderiaId:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResGuarderias
+      PathPart: "{guarderia_id}"
+
+  ResGuarderiaAnimales:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResGuarderiaId
+      PathPart: animales
+
+  MetodoCrearAnimal:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResGuarderiaAnimales
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref AutorizadorCognito
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnGuarderia.Arn}/invocations"
+
+  MetodoOpcionesGuarderiaAnimales:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResGuarderiaAnimales
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: { application/json: '{"statusCode": 200}' }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'authorization,content-type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  ResGuarderiaAnimalId:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResGuarderiaAnimales
+      PathPart: "{animal_id}"
+
+  MetodoEditarAnimal:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResGuarderiaAnimalId
+      HttpMethod: PUT
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref AutorizadorCognito
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnGuarderia.Arn}/invocations"
+
+  MetodoEliminarAnimal:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResGuarderiaAnimalId
+      HttpMethod: DELETE
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref AutorizadorCognito
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnGuarderia.Arn}/invocations"
+
+  MetodoOpcionesGuarderiaAnimalId:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResGuarderiaAnimalId
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: { application/json: '{"statusCode": 200}' }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'authorization,content-type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  ResGuarderiaAnimalFotos:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResGuarderiaAnimalId
+      PathPart: fotos
+
+  MetodoSubirFoto:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResGuarderiaAnimalFotos
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref AutorizadorCognito
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnGuarderia.Arn}/invocations"
+
+  MetodoOpcionesGuarderiaAnimalFotos:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResGuarderiaAnimalFotos
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: { application/json: '{"statusCode": 200}' }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'authorization,content-type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  ResGuarderiaSolicitudes:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResGuarderiaId
+      PathPart: solicitudes
+
+  MetodoListarSolicitudesGuarderia:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResGuarderiaSolicitudes
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref AutorizadorCognito
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnGuarderia.Arn}/invocations"
+
+  MetodoOpcionesGuarderiaSolicitudes:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResGuarderiaSolicitudes
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: { application/json: '{"statusCode": 200}' }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'authorization,content-type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  ResGuarderiaSolicitudAnimalId:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResGuarderiaSolicitudes
+      PathPart: "{animal_id}"
+
+  ResAceptarSolicitud:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResGuarderiaSolicitudAnimalId
+      PathPart: aceptar
+
+  MetodoAceptarSolicitud:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResAceptarSolicitud
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref AutorizadorCognito
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnGuarderia.Arn}/invocations"
+
+  MetodoOpcionesAceptarSolicitud:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResAceptarSolicitud
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: { application/json: '{"statusCode": 200}' }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'authorization,content-type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  ResRechazarSolicitud:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResGuarderiaSolicitudAnimalId
+      PathPart: rechazar
+
+  MetodoRechazarSolicitud:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResRechazarSolicitud
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref AutorizadorCognito
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnGuarderia.Arn}/invocations"
+
+  MetodoOpcionesRechazarSolicitud:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResRechazarSolicitud
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: { application/json: '{"statusCode": 200}' }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'authorization,content-type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  # ----- /guarderia/perfil (singular - recurso raíz distinto de /guarderias) -----
+  ResGuarderiaSingular:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: guarderia
+
+  ResGuarderiaPerfil:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResGuarderiaSingular
+      PathPart: perfil
+
+  MetodoActualizarPerfilGuarderia:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResGuarderiaPerfil
+      HttpMethod: PUT
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref AutorizadorCognito
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnGuarderia.Arn}/invocations"
+
+  MetodoOpcionesGuarderiaPerfil:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResGuarderiaPerfil
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: { application/json: '{"statusCode": 200}' }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'authorization,content-type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  # ----- /solicitudes (FnEscrituraPublica) -----
+  ResSolicitudes:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: solicitudes
+
+  MetodoCrearSolicitud:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResSolicitudes
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnEscrituraPublica.Arn}/invocations"
+
+  MetodoOpcionesSolicitudes:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResSolicitudes
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: { application/json: '{"statusCode": 200}' }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'authorization,content-type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  # ----- /cliente, /cliente/perfil, /cliente/solicitudes (FnCliente) -----
+  ResCliente:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: cliente
+
+  MetodoBorrarCuenta:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResCliente
+      HttpMethod: DELETE
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref AutorizadorCognito
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnCliente.Arn}/invocations"
+
+  MetodoOpcionesCliente:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResCliente
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: { application/json: '{"statusCode": 200}' }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'authorization,content-type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  ResClientePerfil:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResCliente
+      PathPart: perfil
+
+  MetodoObtenerPerfilCliente:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResClientePerfil
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref AutorizadorCognito
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnCliente.Arn}/invocations"
+
+  MetodoActualizarPerfilCliente:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResClientePerfil
+      HttpMethod: PUT
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref AutorizadorCognito
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnCliente.Arn}/invocations"
+
+  MetodoOpcionesClientePerfil:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResClientePerfil
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: { application/json: '{"statusCode": 200}' }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'authorization,content-type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  ResClienteSolicitudes:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResCliente
+      PathPart: solicitudes
+
+  MetodoHistorialCliente:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResClienteSolicitudes
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref AutorizadorCognito
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnCliente.Arn}/invocations"
+
+  MetodoCrearSolicitudCliente:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResClienteSolicitudes
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref AutorizadorCognito
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnCliente.Arn}/invocations"
+
+  MetodoOpcionesClienteSolicitudes:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResClienteSolicitudes
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: { application/json: '{"statusCode": 200}' }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'authorization,content-type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  # ----- /admin/guarderias/... (FnAdmin) -----
+  ResAdmin:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: admin
+
+  ResAdminGuarderias:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResAdmin
+      PathPart: guarderias
+
+  ResAdminPendientes:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResAdminGuarderias
+      PathPart: pendientes
+
+  MetodoListarGuarderiasPendientes:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResAdminPendientes
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref AutorizadorCognito
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnAdmin.Arn}/invocations"
+
+  MetodoOpcionesAdminPendientes:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResAdminPendientes
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: { application/json: '{"statusCode": 200}' }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'authorization,content-type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  ResAdminGuarderiaSub:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResAdminGuarderias
+      PathPart: "{sub}"
+
+  ResAdminAprobar:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResAdminGuarderiaSub
+      PathPart: aprobar
+
+  MetodoAprobarGuarderia:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResAdminAprobar
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref AutorizadorCognito
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnAdmin.Arn}/invocations"
+
+  MetodoOpcionesAdminAprobar:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResAdminAprobar
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: { application/json: '{"statusCode": 200}' }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'authorization,content-type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  ResAdminRechazar:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResAdminGuarderiaSub
+      PathPart: rechazar
+
+  MetodoRechazarGuarderia:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResAdminRechazar
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref AutorizadorCognito
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnAdmin.Arn}/invocations"
+
+  MetodoOpcionesAdminRechazar:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResAdminRechazar
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: { application/json: '{"statusCode": 200}' }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'authorization,content-type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  # ----- /decision (FnDecision) -----
+  ResDecision:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: decision
+
+  MetodoMostrarDecision:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResDecision
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnDecision.Arn}/invocations"
+
+  MetodoConfirmarDecision:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResDecision
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnDecision.Arn}/invocations"
+
+  MetodoOpcionesDecision:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResDecision
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: { application/json: '{"statusCode": 200}' }
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'authorization,content-type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  # ---------------------------------------------------------------------
+  # Deployment inicial + Stage.s
+  # ---------------------------------------------------------------------
+  Deployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - MetodoListarAnimales
+      - MetodoOpcionesAnimales
+      - MetodoObtenerAnimal
+      - MetodoOpcionesAnimalId
+      - MetodoListarGuarderias
+      - MetodoOpcionesGuarderias
+      - MetodoCrearAnimal
+      - MetodoOpcionesGuarderiaAnimales
+      - MetodoEditarAnimal
+      - MetodoEliminarAnimal
+      - MetodoOpcionesGuarderiaAnimalId
+      - MetodoSubirFoto
+      - MetodoOpcionesGuarderiaAnimalFotos
+      - MetodoListarSolicitudesGuarderia
+      - MetodoOpcionesGuarderiaSolicitudes
+      - MetodoAceptarSolicitud
+      - MetodoOpcionesAceptarSolicitud
+      - MetodoRechazarSolicitud
+      - MetodoOpcionesRechazarSolicitud
+      - MetodoActualizarPerfilGuarderia
+      - MetodoOpcionesGuarderiaPerfil
+      - MetodoCrearSolicitud
+      - MetodoOpcionesSolicitudes
+      - MetodoBorrarCuenta
+      - MetodoOpcionesCliente
+      - MetodoObtenerPerfilCliente
+      - MetodoActualizarPerfilCliente
+      - MetodoOpcionesClientePerfil
+      - MetodoHistorialCliente
+      - MetodoCrearSolicitudCliente
+      - MetodoOpcionesClienteSolicitudes
+      - MetodoListarGuarderiasPendientes
+      - MetodoOpcionesAdminPendientes
+      - MetodoAprobarGuarderia
+      - MetodoOpcionesAdminAprobar
+      - MetodoRechazarGuarderia
+      - MetodoOpcionesAdminRechazar
+      - MetodoMostrarDecision
+      - MetodoConfirmarDecision
+      - MetodoOpcionesDecision
+    Properties:
+      RestApiId: !Ref RestApi
+
+  Stage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref Deployment
+      StageName: !Ref Entorno
+      # Techo de gasto: por encima de esto, API Gateway responde 429 en vez
+      # de seguir invocando Lambda.
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          ThrottlingBurstLimit: 20
+          ThrottlingRateLimit: 10
 
 Outputs:
+  RestApiId:
+    Value: !Ref RestApi
+
   ApiEndpoint:
-    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+    Value: !Sub "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${Entorno}"
