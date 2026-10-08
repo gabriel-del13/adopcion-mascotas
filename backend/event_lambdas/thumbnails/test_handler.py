@@ -1,8 +1,6 @@
-"""Test de la función pura de procesado de imagen, sin Docker ni AWS.
+"""Test de la función pura de procesado de imagen, sin AWS.
 
-Requiere Pillow instalado (no forma parte de backend/api/requirements*.txt a
-propósito: esta Lambda se empaqueta como imagen de contenedor, aparte —ver
-Dockerfile en esta misma carpeta).
+Requiere Pillow instalado (no forma parte de backend/api/requirements*.txt).
 """
 import io
 import os

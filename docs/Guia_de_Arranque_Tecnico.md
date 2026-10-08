@@ -15,7 +15,7 @@ la arquitectura es lo que se evalúa.
 | Capa | Tecnología |
 |---|---|
 | IaC | CloudFormation en YAML (sin CDK, sin SAM) |
-| Backend | Python 3.12, FastAPI + Mangum sobre Lambda |
+| Backend | Python 3.12, Lambdas + API Gateway REST API |
 | Frontend | HTML + CSS + JS estático, sin framework |
 | Datos | DynamoDB On-Demand, dos tablas |
 | Auth | Cognito User Pool con tres grupos |
@@ -35,7 +35,7 @@ montar antes toda la tubería de empaquetado:
 ```
 budgets.yaml          presupuesto mensual y alerta
 dynamodb.yaml         las dos tablas (catalogo, solicitudes)
-artefactos.yaml       bucket de artefactos + repositorio ECR
+artefactos.yaml       bucket de artefactos (zips de las Lambdas)
 auth.yaml             Cognito: User Pool, tres grupos, tres App Clients
 notificaciones.yaml   cola SQS + DLQ, Lambda consumidora, SES
 fotos.yaml            buckets de fotos originales/derivadas, Lambda de thumbnails
@@ -56,7 +56,7 @@ Local.
 ```
 infra/templates/        las 8 plantillas de arriba
 infra/scripts/          validación, empaquetado y despliegue
-backend/api/             FastAPI + Mangum, un router y un rol IAM por función
+backend/api/             6 Lambdas, un rol IAM por función
 backend/event_lambdas/   post_confirmation, regenerador_catalogo,
                          consumidora_sqs, thumbnails
 frontend/                sitio estático (HTML/CSS/JS)
@@ -69,7 +69,7 @@ frontend/                sitio estático (HTML/CSS/JS)
 | Para qué | Dónde |
 |---|---|
 | Desplegar el backend en una cuenta AWS | `Despliegue_Backend.md` |
-| Consumir la API desde el frontend | `backend_endpoints.md` + `postman_collection.json` |
+| Consumir la API desde el frontend | `Backend_Endpoints.md` + `postman_collection.json` |
 
 ---
 

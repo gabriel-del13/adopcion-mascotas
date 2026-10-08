@@ -1,5 +1,5 @@
 # Requisitos:
-Cuenta de AWS, AWS CLI v2, Docker desktop corriendo, WSL2 instalado (si tienes windows)
+Cuenta de AWS, AWS CLI v2, WSL2 instalado (si tienes windows)
 
 # Configurando aws cli
 aws configure --profile adopcion-mascotas   # region: eu-west-1
@@ -8,9 +8,8 @@ export AWS_PROFILE=adopcion-mascotas
 CORREO@gmail.com
 # Despliegue, en este orden exacto
 ./infra/scripts/validate-templates.sh
-./infra/scripts/deploy-all.sh dev              # budgets, dynamodb, artefactos (incluye ECR)
-./infra/scripts/build-lambdas.sh dev           # empaqueta api, post-confirmation, regenerador-catalogo
-./infra/scripts/build-thumbnails-image.sh dev  # imagen Docker de la Lambda de fotos
+./infra/scripts/deploy-all.sh dev              # budgets, dynamodb, artefactos
+./infra/scripts/build-lambdas.sh dev           # empaqueta api, post-confirmation, regenerador-catalogo, thumbnails
 ./infra/scripts/deploy-notificaciones.sh dev   # SQS+DLQ, SES, consumidora
 ./infra/scripts/deploy-fotos.sh dev            # buckets de fotos
 ./infra/scripts/deploy-auth-api.sh dev         # auth + api

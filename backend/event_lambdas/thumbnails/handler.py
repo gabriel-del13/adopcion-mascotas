@@ -1,6 +1,5 @@
 """Lambda de thumbnails, disparada por el evento `s3:ObjectCreated` del bucket
-de fotos originales. Va empaquetada como imagen de contenedor (no zip) porque
-Pillow lleva binarios nativos
+de fotos originales.
 
 Standalone: no importa nada de backend/api/app, igual que el resto de
 event_lambdas — este va aparte porque necesita Pillow, que no está en el zip
@@ -8,7 +7,7 @@ de la API.
 
 La clave del objeto es `animales/<guarderiaId>/<animalId>/<fotoId>` (server
 decide la clave al emitir la presignada, ver
-app/routers/guarderia.py:subir_foto). Incluir guarderiaId en la ruta es lo que
+app/handlers/guarderia.py:_subir_foto). Incluir guarderiaId en la ruta es lo que
 permite resolver la clave real de DynamoDB (`PK=GUARDERIA#<sub>`) con un
 `UpdateItem` exacto, sin necesitar Scan ni Query.
 """

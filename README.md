@@ -26,12 +26,12 @@ CloudFront viven en `us-east-1` - pendiente, ver "Estado actual".
 infra/templates/   8 plantillas de CloudFormation (una por stack, ver abajo)
 infra/parameters/  parámetros por entorno (dev.json, prod.json)
 infra/scripts/     validación, empaquetado y despliegue
-backend/api/        FastAPI + Mangum - 6 funciones Lambda, un rol IAM por función
+backend/api/        6 funciones Lambda, un rol IAM por función
 backend/event_lambdas/  funciones disparadas por evento:
   post_confirmation/     trigger de Cognito al confirmar registro
   regenerador_catalogo/  DynamoDB Streams > catálogo JSON en S3
   consumidora_sqs/       cola de notificaciones > SES
-  thumbnails/            Pillow en contenedor, derivadas de fotos
+  thumbnails/            Pillow paar las fotos
 frontend/           prototipo estático (HTML + JS vanilla)
 buildspecs/         reservado para CodeBuild (CI/CD), vacío por ahora
 docs/               documentación de arquitectura (pública, en git)
@@ -44,7 +44,7 @@ docs/               documentación de arquitectura (pública, en git)
 ```
 budgets.yaml        (sin dependencias)
 dynamodb.yaml        (sin dependencias)
-artefactos.yaml       (sin dependencias - incluye el repositorio ECR de thumbnails)
+artefactos.yaml       (sin dependencias)
 auth.yaml            (importa dynamodb.yaml)
 notificaciones.yaml   (importa dynamodb.yaml)
 fotos.yaml            (importa dynamodb.yaml)
@@ -65,8 +65,7 @@ Un único juego de plantillas para `dev` y `prod`, parametrizado por `Entorno`
 
 ## Despliegue rápido
 
-Requisitos: AWS CLI **v2**, Docker Desktop (para la imagen de thumbnails),
-bash (WSL2 en Windows).
+Requisitos: AWS CLI **v2**
 
 ```bash
 aws configure --profile adopcion-mascotas   # region eu-west-1
@@ -74,8 +73,7 @@ export AWS_PROFILE=adopcion-mascotas
 
 ./infra/scripts/validate-templates.sh
 ./infra/scripts/deploy-all.sh dev              # budgets, dynamodb, artefactos
-./infra/scripts/build-lambdas.sh dev           # empaqueta api, post-confirmation, regenerador-catalogo
-./infra/scripts/build-thumbnails-image.sh dev  # imagen Docker de la Lambda de fotos
+./infra/scripts/build-lambdas.sh dev           # empaqueta api, post-confirmation regenerador-catalogo, thumbnails
 ./infra/scripts/deploy-notificaciones.sh dev   # SQS+DLQ, SES, consumidora
 ./infra/scripts/deploy-fotos.sh dev            # buckets de fotos
 ./infra/scripts/deploy-auth-api.sh dev         # auth + api
@@ -106,7 +104,7 @@ limpiarlos a mano si se quiere empezar de cero.
 - Seis Lambdas de API separadas por rol IAM, 
 - Catálogo público que se regenera solo (DynamoDB Streams > Lambda > JSON en S3), 
 - Notificaciones por SQS+SES con enlaces de decisión de un solo uso
-- Fotos procesadas con Pillow en contenedor.
+- Fotos procesadas con Pillow.
 
 **Frontend: estático sin conectar.** `frontend/index.html` es un
 único HTML con JS vanilla, con datos de ejemplo hardcodeados.
