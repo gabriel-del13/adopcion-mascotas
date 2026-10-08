@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Empaqueta backend/api y los event_lambdas (post_confirmation,
-# regenerador_catalogo, consumidora_sqs) en zips listos para Lambda, y los
-# sube al bucket de artefactos del entorno.
+# regenerador_catalogo, consumidora_sqs, thumbnails) en zips listos para
+# Lambda, y los sube al bucket de artefactos del entorno.
 #
 # Uso: ./infra/scripts/build-lambdas.sh <dev|prod>
 #
@@ -73,10 +73,26 @@ mkdir -p "$CS_BUILD"
 cp "$DIR_RAIZ/backend/event_lambdas/consumidora_sqs/handler.py" "$CS_BUILD/handler.py"
 python "$DIR_RAIZ/infra/scripts/zip_dir.py" "$CS_BUILD" "$BUILD_DIR/consumidor-notificaciones.zip"
 
+echo "Empaquetando backend/event_lambdas/thumbnails (Pillow, wheel precompilado ARM64)..."
+TH_BUILD="$BUILD_DIR/thumbnails"
+mkdir -p "$TH_BUILD"
+python -m pip install \
+  --platform manylinux2014_aarch64 \
+  --implementation cp \
+  --python-version 3.12 \
+  --only-binary=:all: \
+  --no-compile \
+  --target "$TH_BUILD" \
+  -r "$DIR_RAIZ/backend/event_lambdas/thumbnails/requirements.txt" \
+  --quiet
+cp "$DIR_RAIZ/backend/event_lambdas/thumbnails/handler.py" "$TH_BUILD/handler.py"
+python "$DIR_RAIZ/infra/scripts/zip_dir.py" "$TH_BUILD" "$BUILD_DIR/thumbnails.zip"
+
 echo "Subiendo a s3://$BUCKET/lambdas/..."
 aws s3 cp "$BUILD_DIR/api.zip" "s3://$BUCKET/lambdas/api.zip"
 aws s3 cp "$BUILD_DIR/post-confirmation.zip" "s3://$BUCKET/lambdas/post-confirmation.zip"
 aws s3 cp "$BUILD_DIR/regenerador-catalogo.zip" "s3://$BUCKET/lambdas/regenerador-catalogo.zip"
 aws s3 cp "$BUILD_DIR/consumidor-notificaciones.zip" "s3://$BUCKET/lambdas/consumidor-notificaciones.zip"
+aws s3 cp "$BUILD_DIR/thumbnails.zip" "s3://$BUCKET/lambdas/thumbnails.zip"
 
-echo "Listo. CodigoS3Bucket=$BUCKET CodigoS3KeyApi=lambdas/api.zip CodigoS3KeyPostConfirmation=lambdas/post-confirmation.zip CodigoS3KeyRegenerador=lambdas/regenerador-catalogo.zip CodigoS3KeyConsumidora=lambdas/consumidor-notificaciones.zip"
+echo "Listo. CodigoS3Bucket=$BUCKET CodigoS3KeyApi=lambdas/api.zip CodigoS3KeyPostConfirmation=lambdas/post-confirmation.zip CodigoS3KeyRegenerador=lambdas/regenerador-catalogo.zip CodigoS3KeyConsumidora=lambdas/consumidor-notificaciones.zip CodigoS3KeyThumbnails=lambdas/thumbnails.zip"
