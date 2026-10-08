@@ -1,6 +1,7 @@
 """Tests de integración: corren contra DynamoDB Local real, no mocks.
 
 Requieren 'docker compose up -d' y 'python scripts/tests/seed_test_dynamo.py'
+ya ejecutados (los mismos datos de prueba que se usan para probar a mano).
 """
 import json as _json
 import os
@@ -10,11 +11,12 @@ from urllib.parse import urlencode
 # Solo se fija aquí, no en app/core/config.py: este módulo es exclusivamente para tests.
 os.environ.setdefault("DYNAMODB_ENDPOINT_URL", "http://localhost:8000")
 
-import pytest 
+import pytest  # noqa: E402
 
-from app.core.auth import requiere_admin, requiere_cliente, requiere_guarderia  
+from app.core.auth import requiere_admin, requiere_cliente, requiere_guarderia  # noqa: E402
 
-# mismo árbol que infra/templates/api.yaml.
+# (método, plantilla de recurso, módulo del handler) - mismo árbol que
+# infra/templates/api.yaml.
 _RUTAS = [
     ("GET", "/animales", "app.handlers.lectura_publica"),
     ("GET", "/animales/{animal_id}", "app.handlers.lectura_publica"),
@@ -128,6 +130,8 @@ def cliente(_estado_auth) -> _ClienteFalso:
 
 @pytest.fixture
 def autenticar(_estado_auth):
+    """Fija el 'sub'/grupo que llevará el evento sintético, igual que en AWS
+    los pondría el Authorizer COGNITO_USER_POOLS antes de invocar la Lambda."""
 
     def _autenticar(dependencia, sub: str) -> None:
         _estado_auth["claims"] = {"sub": sub, "cognito:groups": _GRUPOS[dependencia]}

@@ -7,7 +7,7 @@
   "variable": [
     {
       "key": "base_url",
-      "value": "https://3exbh6sz27.execute-api.eu-west-1.amazonaws.com"
+      "value": "https://3exbh6sz27.execute-api.eu-west-1.amazonaws.com/dev"
     },
     {
       "key": "token_guarderia",
