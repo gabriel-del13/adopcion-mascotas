@@ -1,4 +1,8 @@
-"""
+"""Gestión de animales por la guardería (alta, edición, baja, fotos), 
+perfil propio y solicitudes recibidas (listar/aceptar/rechazar). 
+Cognito nativo + grupo GUARDERIA. 
+Rol IAM: escritura en catalogo, lectura/escritura del GSI de solicitudes por guardería
+S3 PutObject/DeleteObject en los buckets de fotos.
 """
 from datetime import date
 from uuid import uuid4
@@ -151,9 +155,11 @@ def _editar_animal(event: dict) -> dict:
 
 
 def _subir_foto(event: dict) -> dict:
-    """Devuelve una URL presignada de POST para que el navegador suba la foto directo a S3
-    sin pasar por la API. 
-    La clave del objeto la decide el servidor"""
+    """Devuelve una URL presignada de POST (no PUT: PUT no admite límite de
+    tamaño) para que el navegador suba la foto directo a S3, sin pasar por
+    la API. La clave del objeto la decide el servidor. El
+    Content-Type declarado aquí se puede mentir; quien lo verifica de verdad
+    es la Lambda de thumbnails"""
     guarderia_id = event["pathParameters"]["guarderia_id"]
     animal_id = event["pathParameters"]["animal_id"]
     sub = requiere_guarderia(event)

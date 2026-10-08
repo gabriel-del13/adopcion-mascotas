@@ -42,7 +42,7 @@ def test_borrar_cuenta_borra_perfil_y_solicitudes_antes_que_cognito(cliente, aut
     # Deja una solicitud propia para comprobar que el borrado también la alcanza.
     cliente.post("/cliente/solicitudes", json={"animalId": "a6", "mensaje": "Interesada en Mia."})
 
-    with patch("app.routers.cliente.cognito.admin_delete_user") as admin_delete_user:
+    with patch("app.handlers.cliente.cognito.admin_delete_user") as admin_delete_user:
         respuesta = cliente.delete("/cliente")
 
     assert respuesta.status_code == 204

@@ -1,4 +1,10 @@
-"""
+"""Enlaces de decisión por correo (aceptar/rechazar una solicitud sin login). 
+Sin JWT ni cognito, el GET solo valida y muestra una página de confirmación -nunca
+ejecuta la acción-. La acción va en el POST, que dispara desde esa misma página.
+
+No depende del fronend, así que sirve su propio HTML mínimo sin CSS/JS externo.
+Rol IAM: el más restringido de los seis - solo las claves exactas de una solicitud 
+y de un animal, nada de Scan/Query.
 """
 import base64
 import logging

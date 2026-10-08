@@ -172,7 +172,7 @@ def test_aceptar_solicitud_marca_animal_en_proceso(cliente, autenticar):
 def test_subir_foto_devuelve_presignada_con_clave_correcta(cliente, autenticar):
     animal = _crear_animal_de_prueba(cliente, autenticar, nombre="Con fotos")
 
-    with patch("app.routers.guarderia.s3.generate_presigned_post") as generar:
+    with patch("app.handlers.guarderia.s3.generate_presigned_post") as generar:
         generar.return_value = {"url": "https://bucket.s3.amazonaws.com", "fields": {"key": "campo-de-prueba"}}
         respuesta = cliente.post(
             f"/guarderias/g1/animales/{animal['id']}/fotos",
@@ -215,7 +215,7 @@ def test_eliminar_animal_con_fotos_borra_objetos_en_los_dos_buckets(cliente, aut
     animal_con_fotos = Animal.model_validate({**animal, "fotos": ["f1", "f2"]})
     repo_directo.actualizar_animal(animal_con_fotos)
 
-    with patch("app.routers.guarderia.s3.delete_objects") as borrar:
+    with patch("app.handlers.guarderia.s3.delete_objects") as borrar:
         respuesta = cliente.delete(f"/guarderias/g1/animales/{animal['id']}")
 
     assert respuesta.status_code == 204
@@ -230,7 +230,7 @@ def test_eliminar_animal_con_fotos_borra_objetos_en_los_dos_buckets(cliente, aut
 def test_eliminar_animal_sin_fotos_no_llama_a_s3(cliente, autenticar):
     animal = _crear_animal_de_prueba(cliente, autenticar, nombre="Sin fotos, se borra")
 
-    with patch("app.routers.guarderia.s3.delete_objects") as borrar:
+    with patch("app.handlers.guarderia.s3.delete_objects") as borrar:
         respuesta = cliente.delete(f"/guarderias/g1/animales/{animal['id']}")
 
     assert respuesta.status_code == 204
