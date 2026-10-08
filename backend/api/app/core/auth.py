@@ -1,44 +1,38 @@
-"""
-Lectura de los claims de Cognito ya validados por el JWT Authorizer de
-API Gateway.
+"""Lectura de los claims de Cognito ya validados por el Authorizer nativo
+COGNITO_USER_POOLS de API Gateway.
 
 El Authorizer valida la firma y la expiración del token antes de invocar la
 Lambda: aquí solo se leen los claims, nunca se vuelve a verificar el JWT.
-Mangum expone el evento original de API Gateway en `request.scope["aws.event"]`;
-de ahí sale `requestContext.authorizer.jwt.claims`.
 """
-from fastapi import HTTPException, Request
+from app.core.respuestas import ApiError
 
 
-def obtener_claims(request: Request) -> dict:
-    evento = request.scope.get("aws.event", {})
-    claims = evento.get("requestContext", {}).get("authorizer", {}).get("jwt", {}).get("claims")
+def obtener_claims(event: dict) -> dict:
+    claims = event.get("requestContext", {}).get("authorizer", {}).get("claims")
     if not claims:
-        raise HTTPException(status_code=401, detail="No hay un token válido en la petición")
+        raise ApiError(401, "No hay un token válido en la petición")
     return claims
 
 
-def obtener_sub(request: Request) -> str:
-    return obtener_claims(request)["sub"]
+def obtener_sub(event: dict) -> str:
+    return obtener_claims(event)["sub"]
 
 
 def requerir_grupo(grupo: str):
-    """Factoría de dependencias: exige que `grupo` esté en `cognito:groups`.
+    """Exige que 'grupo' esté en 'cognito:groups'.
 
     IAM solo llega hasta la tabla y el índice; que el usuario pertenezca al
-    grupo correcto para ESTE recurso concreto lo comprueba el código, no IAM.
+    grupo correcto para ESTE recurso concreto.
+
+    El Authorizer entrega 'cognito:groups' como un string separado por comas 
+    sin corchetes ("GRUPO1,GRUPO2").
     """
 
-    def dependencia(request: Request) -> str:
-        claims = obtener_claims(request)
-        grupos = claims.get("cognito:groups", [])
-        # El JWT Authorizer de API Gateway convierte el claim de lista a un
-        # string con la notación "[GRUPO1, GRUPO2]" (no CSV ni separado por
-        # espacios), así que hay que quitar los corchetes antes de separar.
-        if isinstance(grupos, str):
-            grupos = [g.strip() for g in grupos.strip("[]").split(",") if g.strip()]
+    def dependencia(event: dict) -> str:
+        claims = obtener_claims(event)
+        grupos = [g.strip() for g in claims.get("cognito:groups", "").split(",") if g.strip()]
         if grupo not in grupos:
-            raise HTTPException(status_code=403, detail=f"Requiere el grupo {grupo}")
+            raise ApiError(403, f"Requiere el grupo {grupo}")
         return claims["sub"]
 
     return dependencia
