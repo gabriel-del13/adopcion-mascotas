@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Despliega fotos.yaml (buckets de originales/derivadas + Lambda de
-# thumbnails), apuntando a la imagen que dejó build-thumbnails-image.sh en
-# ECR.
+# Despliega fotos.yaml (buckets de originales/derivadas + Lambda de thumbnails), 
+# apuntando al zip que dejó build-lambdas.sh en el bucket de artefactos.
 #
 # Requisitos previos, en orden: deploy-all.sh <entorno> (crea dynamodb y el
-# repositorio ECR en artefactos.yaml) y build-thumbnails-image.sh <entorno>
-# (sube la imagen). Debe desplegarse ANTES que deploy-auth-api.sh: api.yaml
-# importa los dos buckets de aquí para los permisos de RolGuarderia.
+# bucket de artefactos) y build-lambdas.sh <entorno> (sube el zip). Debe
+# desplegarse ANTES que deploy-auth-api.sh: api.yaml importa los dos buckets
+# de aquí para los permisos de RolGuarderia.
 #
 # Uso: ./infra/scripts/deploy-fotos.sh <dev|prod>
 set -euo pipefail
@@ -37,7 +36,7 @@ ruta_windows() {
 
 PROYECTO="$(valor_parametro Proyecto)"
 CUENTA="$(aws sts get-caller-identity --query Account --output text)"
-IMAGEN="${CUENTA}.dkr.ecr.us-east-1.amazonaws.com/${PROYECTO}-${ENTORNO}-thumbnails:${ENTORNO}-latest"
+BUCKET="${PROYECTO}-${ENTORNO}-artefactos-${CUENTA}"
 
 echo "Desplegando fotos.yaml en $ENTORNO..."
 aws cloudformation deploy \
@@ -48,12 +47,13 @@ aws cloudformation deploy \
   --parameter-overrides \
     Proyecto="$PROYECTO" \
     Entorno="$ENTORNO" \
-    ImagenThumbnails="$IMAGEN"
+    CodigoS3Bucket="$BUCKET" \
+    CodigoS3KeyThumbnails="lambdas/thumbnails.zip"
 
-# CloudFormation no vuelve a desplegar la imagen si la cadena ImagenThumbnails
-# no cambió, aunque la imagen en ECR sea distinta 
+# CloudFormation no vuelve a subir el código si el S3Key no cambió, aunque el
+# objeto en S3 sea distinto. Como el key es siempre el mismo, hay que forzar la actualización a mano.
 echo "Forzando actualización de código..."
 aws lambda update-function-code \
   --function-name "${PROYECTO}-${ENTORNO}-thumbnails" \
-  --image-uri "$IMAGEN" \
+  --s3-bucket "$BUCKET" --s3-key "lambdas/thumbnails.zip" \
   --region us-east-1 --query "LastUpdateStatus" --output text
