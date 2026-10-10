@@ -51,16 +51,32 @@ aws cloudformation deploy \
     CodigoS3KeyPostConfirmation="lambdas/post-confirmation.zip"
 
 echo "Desplegando api.yaml en $ENTORNO..."
+# --s3-bucketssolo aquí, no en los demás deploy-*.sh: el árbol de
+# recursos REST API hace que esta plantilla supere los 51200 bytes que CloudFormation
+# admite como TemplateBody en líneas
 aws cloudformation deploy \
   --region us-east-1 \
   --stack-name "${PROYECTO}-${ENTORNO}-api" \
   --template-file "$(ruta_windows "$DIR_RAIZ/infra/templates/api.yaml")" \
+  --s3-bucket "$BUCKET" \
+  --s3-prefix "plantillas" \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides \
     Proyecto="$PROYECTO" \
     Entorno="$ENTORNO" \
     CodigoS3Bucket="$BUCKET" \
     CodigoS3KeyApi="lambdas/api.zip"
+
+echo "Publicando los cambios de rutas en el stage $ENTORNO..."
+REST_API_ID="$(aws cloudformation describe-stacks \
+  --region us-east-1 --stack-name "${PROYECTO}-${ENTORNO}-api" \
+  --query "Stacks[0].Outputs[?OutputKey=='RestApiId'].OutputValue" --output text)"
+aws apigateway create-deployment \
+  --rest-api-id "$REST_API_ID" \
+  --stage-name "$ENTORNO" \
+  --region us-east-1 \
+  --description "Deploy $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --query "id" --output text
 
 # CloudFormation no vuelve a subir el código si el S3Key no cambió, aunque el
 # objeto en S3 sea distinto: solo compara la cadena "S3Bucket/S3Key" contra el

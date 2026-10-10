@@ -19,9 +19,8 @@ COLA_NOTIFICACIONES_URL = os.environ.get("COLA_NOTIFICACIONES_URL")
 BUCKET_FOTOS_ORIGINALES = os.environ.get("BUCKET_FOTOS_ORIGINALES")
 BUCKET_FOTOS_DERIVADAS = os.environ.get("BUCKET_FOTOS_DERIVADAS")
 # Base para los enlaces de decisión por correo (aceptar/rechazar), p. ej.
-# https://<api-id>.execute-api.eu-west-1.amazonaws.com. En local, la propia
-# API de uvicorn.
+# https://<api-id>.execute-api.eu-west-1.amazonaws.com/dev
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
-# Solo lo usa app/routers/cliente.py (borrado de cuenta, AdminDeleteUser). En
-# local no hay Cognito real, así que ese endpoint no se puede probar contra uvicorn
+# Solo lo usa app/handlers/cliente.py (borrado de cuenta, AdminDeleteUser).
+# NO hay forma de probar ese endpoint sin Cognito real.
 USER_POOL_ID = os.environ.get("USER_POOL_ID")

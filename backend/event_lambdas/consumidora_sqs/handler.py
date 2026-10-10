@@ -6,8 +6,8 @@ NotificadorSqs). Así el rol IAM de esta función se reduce a
 sqs:ReceiveMessage/DeleteMessage + ses:SendEmail, nada de tablas
 (infra/templates/notificaciones.yaml).
 
-Standalone (sin FastAPI/Mangum ni el paquete app/): igual que
-regenerador_catalogo y post_confirmation, este zip no lleva backend/api/app.
+Standalone (sin el paquete app/ de la API): igual que regenerador_catalogo y
+post_confirmation, este zip no lleva backend/api/app.
 """
 import json
 import os
