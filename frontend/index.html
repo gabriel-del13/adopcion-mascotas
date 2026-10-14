@@ -367,7 +367,7 @@ footer{border-top:1px solid var(--line);padding:2rem 1.5rem;text-align:center;co
 
 <script>
 // --- CONFIGURACIÓN DE LA API ---
-const API_URL = 'https://51bfrf1tpk.execute-api.us-east-1.amazonaws.com';
+const API_URL = 'https://kpj497bnz4.execute-api.us-east-1.amazonaws.com/dev';
 let animals = [];
 
 async function cargarCatalogo() {
@@ -509,8 +509,8 @@ function advanceEstado(id){
 
 // --- CONFIGURACIÓN DE COGNITO ---
 const poolData = {
-  UserPoolId: 'us-east-1_wqbpR8zqb', 
-  ClientId: '2523mav2i3t4955r76sbbq34vs'    
+  UserPoolId: 'us-east-1_HMA54ADVT', 
+  ClientId: '26pou7kbiatna595i9v68t43mb'    
 };
 const userPool = new AmazonCognitoIdentity.CognitoUserPool(poolData);
 let unverifiedCognitoUser = null; 
@@ -612,8 +612,8 @@ function executeAuth(e) {
     const tipoCuenta = document.getElementById('tipo-cuenta').value;
     
     const clientIdActivo = (tipoCuenta === 'guarderia') 
-      ? '18t3f9cdl6o4eend714bfghc6m'  // App Client de Guardería
-      : '2523mav2i3t4955r76sbbq34vs'; // App Client de Cliente
+      ? '6vonv1j2tlc3a7ifvfi0ujt8e6'  // App Client de Guardería
+      : '26pou7kbiatna595i9v68t43mb'; // App Client de Cliente
 
     const registerPool = new AmazonCognitoIdentity.CognitoUserPool({
       UserPoolId: 'us-east-1_wqbpR8zqb',
