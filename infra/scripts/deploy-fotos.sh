@@ -31,7 +31,7 @@ for p in params:
 }
 
 ruta_windows() {
-  echo "$1"
+  cygpath -w "$1" | tr '\\' '/'
 }
 
 PROYECTO="$(valor_parametro Proyecto)"
