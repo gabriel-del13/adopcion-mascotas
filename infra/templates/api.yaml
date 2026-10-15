@@ -252,7 +252,7 @@ Resources:
       LogGroupName: !Sub "/aws/lambda/${FnCliente}"
       RetentionInDays: 30
 
-  PermisoApiCliente:ss
+  PermisoApiCliente:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
