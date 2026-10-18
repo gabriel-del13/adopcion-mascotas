@@ -445,22 +445,64 @@ function openDetail(id){
     <div class="need-box"><strong>Necesidades:</strong> ${a.necesidades}</div>
     <hr>
     <h2>Solicitar la adopción de ${a.nombre}</h2>
-    <form onsubmit="return handleSolicitud(event)">
-      <label>Tu nombre<input type="text" required></label>
-      <label>Email<input type="email" required></label>
-      <label>Teléfono<input type="tel"></label>
-      <label>¿Por qué creéis que encajáis?<textarea required></textarea></label>
-      <button class="btn btn-primary" type="submit">Enviar solicitud de adopción</button>
+    <form id="form-solicitud" onsubmit="return handleSolicitud(event, '${a.id}')">
+      <label>Tu nombre<input type="text" id="sol-nombre" required></label>
+      <label>Email<input type="email" id="sol-email" required></label>
+      <label>Teléfono<input type="tel" id="sol-tel"></label>
+      <label>¿Por qué creéis que encajáis?<textarea id="sol-motivo" required></textarea></label>
+      <button class="btn btn-primary" type="submit" id="btn-enviar-solicitud">Enviar solicitud de adopción</button>
     </form>
     <p id="solicitud-msg" class="msg" hidden></p>
   `;
   showView('detail');
 }
-function handleSolicitud(e){
+async function handleSolicitud(e, animalId) {
   e.preventDefault();
-  const m=document.getElementById('solicitud-msg');
-  m.textContent='Solicitud enviada. La protectora revisará tu cuestionario y te contactará por email.';
-  m.hidden=false;e.target.reset();return false;
+  
+  const btn = document.getElementById('btn-enviar-solicitud');
+  const msg = document.getElementById('solicitud-msg');
+  
+  btn.textContent = 'Enviando a la protectora...';
+  btn.disabled = true;
+
+  try {
+    const token = localStorage.getItem('jwtToken');
+    
+    const nuevaSolicitud = {
+      animal_id: animalId,
+      nombre_adoptante: document.getElementById('sol-nombre').value,
+      email_adoptante: document.getElementById('sol-email').value,
+      telefono: document.getElementById('sol-tel').value,
+      motivo: document.getElementById('sol-motivo').value
+    };
+
+    const response = await fetch(`${API_URL}/cliente/solicitudes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }) 
+      },
+      body: JSON.stringify(nuevaSolicitud)
+    });
+
+    if (!response.ok) throw new Error(`El servidor devolvió un error ${response.status}`);
+
+    msg.textContent = '¡Solicitud enviada con éxito! La protectora revisará tu cuestionario y te contactará.';
+    msg.style.color = "var(--pine)";
+    msg.hidden = false;
+    document.getElementById('form-solicitud').reset();
+
+  } catch (error) {
+    console.error("Fallo al enviar la solicitud:", error);
+    msg.textContent = 'Hubo un error al procesar tu solicitud. Asegúrate de haber iniciado sesión como cliente.';
+    msg.style.color = "var(--rust)";
+    msg.hidden = false;
+  } finally {
+    btn.textContent = 'Enviar solicitud de adopción';
+    btn.disabled = false;
+  }
+  
+  return false;
 }
 
 function showAuth(role){selectedRole=role;setRole(role);showView('auth');}
