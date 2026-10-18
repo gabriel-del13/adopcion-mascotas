@@ -448,7 +448,7 @@ function openDetail(id){
     <form id="form-solicitud" onsubmit="return handleSolicitud(event, '${a.id}')">
       <label>Tu nombre<input type="text" id="sol-nombre" required></label>
       <label>Email<input type="email" id="sol-email" required></label>
-      <label>Teléfono<input type="tel" id="sol-tel"></label>
+      <label>Teléfono<input type="tel" id="sol-tel" required></label>
       <label>¿Por qué creéis que encajáis?<textarea id="sol-motivo" required></textarea></label>
       <button class="btn btn-primary" type="submit" id="btn-enviar-solicitud">Enviar solicitud de adopción</button>
     </form>
@@ -471,12 +471,14 @@ async function handleSolicitud(e, animalId) {
     const rutaEndpoint = token ? '/cliente/solicitudes' : '/publico/solicitudes';
     
     const nuevaSolicitud = {
-      animalId: animalId,
+      animalId: String(animalId), 
       nombre_adoptante: document.getElementById('sol-nombre').value,
       email_adoptante: document.getElementById('sol-email').value,
       telefono: document.getElementById('sol-tel').value,
-      mensaje: document.getElementById('sol-motivo').value
+      mensaje: document.getElementById('sol-motivo').value 
     };
+
+    console.log("Enviando JSON:", JSON.stringify(nuevaSolicitud));
 
     const response = await fetch(`${API_URL}${rutaEndpoint}`, {
       method: 'POST',
@@ -488,8 +490,11 @@ async function handleSolicitud(e, animalId) {
     });
 
     if (!response.ok) {
-        throw new Error(`El servidor devolvió un error ${response.status}`);
+        const errorData = await response.json().catch(() => null);
+        console.error("Detalle del error devuelto por la API:", errorData);
+        throw new Error(`Error ${response.status}`);
     }
+
 
     msg.textContent = '¡Solicitud enviada con éxito! La protectora revisará tu cuestionario y te contactará.';
     msg.style.color = "var(--pine)";
@@ -498,7 +503,7 @@ async function handleSolicitud(e, animalId) {
 
   } catch (error) {
     console.error("Fallo al enviar la solicitud:", error);
-    msg.textContent = 'Hubo un error al enviar tu solicitud. Inténtalo de nuevo más tarde.';
+    msg.textContent = 'Hubo un error al enviar tu solicitud (Posible error 422). Revisa la consola (F12) para ver los detalles exactos del fallo de la API.';
     msg.style.color = "var(--rust)";
     msg.hidden = false;
   } finally {
@@ -546,7 +551,7 @@ function rowHTML(s) {
     : `<button class="btn-small" onclick="advanceEstado('${s.id}')">Avanzar estado</button>`;
 
   const nombreAdoptante = s.nombre_adoptante || s.adoptante_email || s.adoptante || 'Anónimo';
-  const nombreAnimal = s.nombre_animal || s.animal_id || s.animal || 'Animal';
+  const nombreAnimal = s.nombre_animal || s.animalId || s.animal || 'Animal';
   
   let fechaFmt = 'Reciente';
   if (s.fecha_creacion || s.fecha) {
