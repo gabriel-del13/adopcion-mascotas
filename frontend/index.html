@@ -565,10 +565,10 @@ function executeAuth(e) {
 
     cognitoUser.authenticateUser(authenticationDetails, {
       onSuccess: function (result) {
-        const accessToken = result.getAccessToken().getJwtToken();
-        localStorage.setItem('jwtToken', accessToken); 
+        const idToken = result.getIdToken().getJwtToken();
+        localStorage.setItem('jwtToken', idToken);
         
-        const rol = getRolUsuario(accessToken);
+        const rol = getRolUsuario(idToken);
         document.getElementById('nav-auth').textContent = 'Cerrar sesión';
         
         if (rol === 'ADMIN') {
