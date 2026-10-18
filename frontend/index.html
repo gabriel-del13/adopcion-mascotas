@@ -356,7 +356,6 @@ footer{border-top:1px solid var(--line);padding:2rem 1.5rem;text-align:center;co
       </tr>
     </thead>
     <tbody id="lista-guarderias-pendientes">
-      <!-- Se llenará con JavaScript -->
     </tbody>
   </table>
 </section>
@@ -366,7 +365,6 @@ footer{border-top:1px solid var(--line);padding:2rem 1.5rem;text-align:center;co
 <footer>Huellas Encontradas · prototipo estático del frontend</footer>
 
 <script>
-// --- CONFIGURACIÓN DE LA API ---
 const API_URL = 'https://kpj497bnz4.execute-api.us-east-1.amazonaws.com/dev';
 let animals = [];
 
@@ -400,23 +398,31 @@ function showView(id){document.querySelectorAll('.view').forEach(v=>v.hidden=tru
 function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
 
 function cardHTML(a){
-  const cls=a.status==='Urgente'?'st-urgente':a.status==='En tránsito'?'st-transito':'';
+  const cls = a.estado === 'Urgente' ? 'st-urgente' : a.estado === 'En tránsito' ? 'st-transito' : '';
+  
+  const foto = a.fotoUrl 
+    ? `<img src="${a.fotoUrl}" alt="${a.nombre}" style="width:100%; height:100%; object-fit:cover;">` 
+    : `<svg><use href="#icon-camera"/></svg><span>Foto de ${a.nombre}</span>`;
+
   return `<article class="card ${cls}">
-    <div class="card-photo photo-slot"><svg><use href="#icon-camera"/></svg><span>Foto de ${a.name}</span></div>
+    <div class="card-photo photo-slot">${foto}</div>
     <div class="card-body">
-      <p class="card-status">${a.status}</p>
-      <h3>${a.name}</h3>
-      <p class="meta"><svg class="type-icon"><use href="#icon-${a.icon}"/></svg>${a.breed}, ${a.age}, ${a.sex}</p>
-      <span class="tag">${cap(a.type)}</span>
-      ${a.need!=='Ninguna necesidad especial'?`<span class="tag">${a.need}</span>`:''}
-      <button class="btn btn-outline btn-block" onclick="openDetail(${a.id})">Ver ficha completa</button>
+      <p class="card-status">${a.estado || 'Disponible'}</p>
+      <h3>${a.nombre}</h3>
+      <p class="meta"><svg class="type-icon"><use href="#icon-${a.icon}"/></svg>${a.raza}, ${a.edad}, ${a.sexo}</p>
+      <span class="tag">${cap(a.tipo)}</span>
+      ${a.necesidades && a.necesidades !== 'Ninguna' ? `<span class="tag">${a.necesidades}</span>` : ''}
+      <button class="btn btn-outline btn-block" onclick="openDetail('${a.id}')">Ver ficha completa</button>
     </div>
   </article>`;
 }
 function renderCatalog(){
-  const grid=document.getElementById('catalog-grid');
-  const filtered=animals.filter(a=>(activeType==='todos'||a.type===activeType)&&(activeStatus==='todos'||a.status===activeStatus));
-  grid.innerHTML=filtered.map(cardHTML).join('')||'<p class="empty">No hay animales con estos filtros. Prueba a quitar alguno.</p>';
+  const grid = document.getElementById('catalog-grid');
+  const filtered = animals.filter(a => 
+    (activeType === 'todos' || a.tipo === activeType) && 
+    (activeStatus === 'todos' || a.estado === activeStatus)
+  );
+  grid.innerHTML = filtered.map(cardHTML).join('') || '<p class="empty">No hay animales con estos filtros. Prueba a quitar alguno.</p>';
 }
 document.getElementById('filter-type').addEventListener('click',e=>{
   if(!e.target.matches('.chip'))return;
@@ -430,44 +436,33 @@ document.getElementById('filter-status').addEventListener('click',e=>{
 });
 
 function openDetail(id){
-  const a=animals.find(x=>x.id===id);
+  const a = animals.find(x => String(x.id) === String(id));
+  if (!a) return;
+
+  const foto = a.fotoUrl 
+    ? `<img src="${a.fotoUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:10px;">` 
+    : `<svg><use href="#icon-camera"/></svg><span>Foto principal de ${a.nombre}</span>`;
+
   document.getElementById('detail-content').innerHTML=`
-    <div class="detail-photo photo-slot"><svg><use href="#icon-camera"/></svg><span>Foto principal de ${a.name}</span></div>
-    <div class="gallery">
-      <div class="photo-slot"><svg><use href="#icon-camera"/></svg><span>Foto 2</span></div>
-      <div class="photo-slot"><svg><use href="#icon-camera"/></svg><span>Foto 3</span></div>
-      <div class="photo-slot"><svg><use href="#icon-camera"/></svg><span>Foto 4</span></div>
-      <div class="photo-slot"><svg><use href="#icon-camera"/></svg><span>Foto 5</span></div>
-    </div>
+    <div class="detail-photo photo-slot">${foto}</div>
     <div class="detail-head">
       <svg class="detail-icon"><use href="#icon-${a.icon}"/></svg>
       <div>
-        <p class="card-status">${a.status}</p>
-        <h1>${a.name}</h1>
-        <p class="meta">${a.breed}, ${a.age}, ${a.sex}, tamaño ${a.size.toLowerCase()}</p>
+        <p class="card-status">${a.estado || 'Disponible'}</p>
+        <h1>${a.nombre}</h1>
+        <p class="meta">${a.raza}, ${a.edad}, ${a.sexo}, tamaño ${a.tamano ? a.tamano.toLowerCase() : ''}</p>
+        <p class="meta" style="color: var(--rust);">📍 ${a.ciudad}, ${a.provincia}</p>
       </div>
     </div>
-    <p class="story">${a.story}</p>
-    <div class="need-box"><strong>Necesidades:</strong> ${a.need}</div>
+    <p class="story">${a.descripcion}</p>
+    <div class="need-box"><strong>Necesidades:</strong> ${a.necesidades}</div>
     <hr>
-    <h2>Solicitar la adopción de ${a.name}</h2>
+    <h2>Solicitar la adopción de ${a.nombre}</h2>
     <form onsubmit="return handleSolicitud(event)">
       <label>Tu nombre<input type="text" required></label>
       <label>Email<input type="email" required></label>
       <label>Teléfono<input type="tel"></label>
-      <label>Tipo de vivienda
-        <select><option>Piso sin exterior</option><option>Piso con terraza</option><option>Casa con jardín</option></select>
-      </label>
-      <label>¿Tienes otros animales en casa?
-        <select><option>No</option><option>Sí</option></select>
-      </label>
-      <label>Experiencia previa con esta especie
-        <select><option>No</option><option>Sí</option></select>
-      </label>
-      <label>Disponibilidad diaria
-        <select><option>Menos de 4 horas</option><option>Entre 4 y 8 horas</option><option>Todo el día</option></select>
-      </label>
-      <label>¿Por qué creéis que encajáis?<textarea></textarea></label>
+      <label>¿Por qué creéis que encajáis?<textarea required></textarea></label>
       <button class="btn btn-primary" type="submit">Enviar solicitud de adopción</button>
     </form>
     <p id="solicitud-msg" class="msg" hidden></p>
