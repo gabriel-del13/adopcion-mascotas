@@ -468,6 +468,8 @@ async function handleSolicitud(e, animalId) {
   try {
     const token = localStorage.getItem('jwtToken');
     
+    const rutaEndpoint = token ? '/cliente/solicitudes' : '/publico/solicitudes';
+    
     const nuevaSolicitud = {
       animal_id: animalId,
       nombre_adoptante: document.getElementById('sol-nombre').value,
@@ -476,7 +478,7 @@ async function handleSolicitud(e, animalId) {
       motivo: document.getElementById('sol-motivo').value
     };
 
-    const response = await fetch(`${API_URL}/cliente/solicitudes`, {
+    const response = await fetch(`${API_URL}${rutaEndpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -485,7 +487,9 @@ async function handleSolicitud(e, animalId) {
       body: JSON.stringify(nuevaSolicitud)
     });
 
-    if (!response.ok) throw new Error(`El servidor devolvió un error ${response.status}`);
+    if (!response.ok) {
+        throw new Error(`El servidor devolvió un error ${response.status}`);
+    }
 
     msg.textContent = '¡Solicitud enviada con éxito! La protectora revisará tu cuestionario y te contactará.';
     msg.style.color = "var(--pine)";
@@ -494,7 +498,7 @@ async function handleSolicitud(e, animalId) {
 
   } catch (error) {
     console.error("Fallo al enviar la solicitud:", error);
-    msg.textContent = 'Hubo un error al procesar tu solicitud. Asegúrate de haber iniciado sesión como cliente.';
+    msg.textContent = 'Hubo un error al enviar tu solicitud. Inténtalo de nuevo más tarde.';
     msg.style.color = "var(--rust)";
     msg.hidden = false;
   } finally {
