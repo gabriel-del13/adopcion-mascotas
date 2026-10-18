@@ -339,9 +339,6 @@ footer{border-top:1px solid var(--line);padding:2rem 1.5rem;text-align:center;co
   <table>
     <thead><tr><th>Adoptante</th><th>Animal</th><th>Fecha</th><th>Estado</th><th></th></tr></thead>
     <tbody id="solicitudes-body"></tbody>
-  </table>
-  <h3>Mensajes y notificaciones</h3>
-  <div id="mensajes-list"></div>
 </section>
 
 <section id="view-superadmin" class="view" hidden>
@@ -379,17 +376,7 @@ async function cargarCatalogo() {
     document.getElementById('catalog-grid').innerHTML = '<p class="empty">Error al conectar con la base de datos de AWS.</p>';
   }
 }
-let solicitudes=[
-{id:1,adoptante:'Marta G.',animal:'Luna',fecha:'12/09/2026',estado:'Pendiente'},
-{id:2,adoptante:'Javier R.',animal:'Rocco',fecha:'15/09/2026',estado:'En revisión'},
-{id:3,adoptante:'Elena P.',animal:'Nube',fecha:'20/09/2026',estado:'Aprobada'},
-{id:4,adoptante:'Sergio M.',animal:'Coco',fecha:'22/09/2026',estado:'Pendiente'}
-];
-const mensajes=[
-{titulo:'Nueva solicitud recibida',detalle:'Marta G. ha solicitado la adopción de Luna.',tiempo:'Hace 2 horas'},
-{titulo:'Documento pendiente',detalle:'Falta el justificante de vivienda de Javier R. para Rocco.',tiempo:'Hace 1 día'},
-{titulo:'Adopción confirmada',detalle:'Elena P. ha completado el proceso de adopción de Nube.',tiempo:'Hace 3 días'}
-];
+let solicitudes = [];
 
 let activeType='todos', activeStatus='todos', selectedRole='adoptante', authMode='login', currentRole=null;
 
@@ -484,16 +471,54 @@ function setRole(role){
   updateAuthFields();
 }
 
-function renderAdmin(){
-  document.getElementById('stat-animales').textContent=animals.length;
-  document.getElementById('stat-pendientes').textContent=solicitudes.filter(s=>s.estado==='Pendiente').length;
-  document.getElementById('solicitudes-body').innerHTML=solicitudes.map(rowHTML).join('');
-  document.getElementById('mensajes-list').innerHTML=mensajes.map(m=>`<div class="msg-item"><strong>${m.titulo}</strong><span class="msg-time">${m.tiempo}</span><p>${m.detalle}</p></div>`).join('');
+function renderAdmin() {
+  document.getElementById('stat-animales').textContent = animals.length;
+  
+  const numPendientes = solicitudes.filter(s => 
+    s.estado && s.estado.toUpperCase() === 'PENDIENTE'
+  ).length;
+  document.getElementById('stat-pendientes').textContent = numPendientes;
+
+  const tbody = document.getElementById('solicitudes-body');
+  
+  if (solicitudes.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--ink-muted); padding: 2rem;">No hay solicitudes recibidas todavía.</td></tr>';
+  } else {
+    tbody.innerHTML = solicitudes.map(rowHTML).join('');
+  }
 }
-function rowHTML(s){
-  const cls=s.estado==='Pendiente'?'badge-pendiente':s.estado==='En revisión'?'badge-revision':'badge-aprobada';
-  const next=s.estado==='Aprobada'?'':`<button class="btn-small" onclick="advanceEstado(${s.id})">Avanzar estado</button>`;
-  return `<tr><td>${s.adoptante}</td><td>${s.animal}</td><td>${s.fecha}</td><td><span class="badge ${cls}">${s.estado}</span></td><td>${next}</td></tr>`;
+function rowHTML(s) {
+  const estadoOriginal = s.estado || 'PENDIENTE';
+  const estadoNormalizado = cap(estadoOriginal.toLowerCase());
+
+  let cls = 'badge-pendiente';
+  if (estadoNormalizado === 'En revisión' || estadoNormalizado === 'En_revision') cls = 'badge-revision';
+  if (estadoNormalizado === 'Aprobada' || estadoNormalizado === 'Aprobado') cls = 'badge-aprobada';
+
+  const next = (estadoNormalizado.includes('Aprobada') || estadoNormalizado.includes('Aprobado')) 
+    ? '' 
+    : `<button class="btn-small" onclick="advanceEstado('${s.id}')">Avanzar estado</button>`;
+
+  const nombreAdoptante = s.nombre_adoptante || s.adoptante_email || s.adoptante || 'Anónimo';
+  const nombreAnimal = s.nombre_animal || s.animal_id || s.animal || 'Animal';
+  
+  let fechaFmt = 'Reciente';
+  if (s.fecha_creacion || s.fecha) {
+    const fechaRaw = s.fecha_creacion || s.fecha;
+    if (fechaRaw.includes('T')) {
+      fechaFmt = new Date(fechaRaw).toLocaleDateString('es-ES');
+    } else {
+      fechaFmt = fechaRaw;
+    }
+  }
+
+  return `<tr>
+    <td>${nombreAdoptante}</td>
+    <td>${nombreAnimal}</td>
+    <td>${fechaFmt}</td>
+    <td><span class="badge ${cls}">${estadoNormalizado}</span></td>
+    <td>${next}</td>
+  </tr>`;
 }
 function advanceEstado(id){
   const s=solicitudes.find(x=>x.id===id);
@@ -574,6 +599,7 @@ function executeAuth(e) {
         } else if (rol === 'GUARDERIA') {
             document.getElementById('nav-panel').hidden = false;
             document.getElementById('nav-panel').onclick = () => showView('admin');
+            cargarSolicitudes();
             renderAdmin(); 
             showView('admin');
         } else {
@@ -799,6 +825,28 @@ async function aprobarGuarderia(sub) {
   } catch (error) {
     console.error("Error al aprobar:", error);
     alert('Hubo un error al intentar aprobar la guardería.');
+  }
+}
+async function cargarSolicitudes() {
+  const token = localStorage.getItem('jwtToken');
+  if (!token) return;
+  
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const guarderiaId = payload.sub; // Tu ID de protectora
+
+    const response = await fetch(`${API_URL}/guarderias/${guarderiaId}/solicitudes`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (!response.ok) throw new Error('Error al cargar las solicitudes');
+    
+    solicitudes = await response.json();
+    renderAdmin(); // Repintamos la tabla con los datos reales
+  } catch (error) {
+    console.error("Fallo al obtener solicitudes:", error);
+    document.getElementById('solicitudes-body').innerHTML = '<tr><td colspan="5">Error al cargar solicitudes.</td></tr>';
   }
 }
 </script>
