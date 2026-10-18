@@ -471,11 +471,11 @@ async function handleSolicitud(e, animalId) {
     const rutaEndpoint = token ? '/cliente/solicitudes' : '/publico/solicitudes';
     
     const nuevaSolicitud = {
-      animal_id: animalId,
+      animalId: animalId,
       nombre_adoptante: document.getElementById('sol-nombre').value,
       email_adoptante: document.getElementById('sol-email').value,
       telefono: document.getElementById('sol-tel').value,
-      motivo: document.getElementById('sol-motivo').value
+      mensaje: document.getElementById('sol-motivo').value
     };
 
     const response = await fetch(`${API_URL}${rutaEndpoint}`, {
