@@ -1,3 +1,5 @@
+# Por la naturaleza del laboratorio, donde no se puede implementar ni route 53, budgets y certificados, no se ha implementado esta parte y la dejamos como documentacion
+
 # Parámetros por entorno
 
 `dev.json` y `prod.json` son los ficheros de parámetros de **`main.yaml`**, el
@@ -34,10 +36,10 @@ aws cloudformation deploy \
 
 | Parámetro | Entorno | Cuándo se rellena |
 |---|---|---|
-| `EmailAlertas` | dev y prod | Fase 2, antes de desplegar `budgets.yaml` |
-| `DominioRaiz` | prod | Fase 9, al comprar el dominio en Route 53 |
-| `CertificadoArn` | prod | Fase 9, salida del stack `edge-us-east-1` |
-| `WebAclArn` | prod | Fase 9, salida del stack `edge-us-east-1` |
+| `EmailAlertas` | dev y prod |antes de desplegar `budgets.yaml` |
+| `DominioRaiz` | prod | al comprar el dominio en Route 53 |
+| `CertificadoArn` | prod | salida del stack `edge-us-east-1` |
+| `WebAclArn` | prod | salida del stack `edge-us-east-1` |
 
 En `dev` los tres últimos se quedan vacíos a propósito: no hay dominio propio,
 ni certificado, ni WAF. `cdn-dns.yaml` los trata con `Conditions`.
