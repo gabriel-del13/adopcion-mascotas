@@ -1,0 +1,421 @@
+{
+  "info": {
+    "name": "Adopción de Mascotas (dev, AWS real)",
+    "description": "Contra la API ya desplegada en AWS (entorno dev, cuenta personal, temporal). Ver .docs/backend_endpoints.md para el mapa completo de rutas y el contrato con el frontend. Los endpoints públicos funcionan sin nada más. Los de guardería/cliente/admin exigen un IdToken real de Cognito: `aws cognito-idp admin-initiate-auth --user-pool-id eu-west-1_1nHy5snnV --client-id <app-client> --auth-flow ADMIN_USER_PASSWORD_AUTH --auth-parameters USERNAME=<email>,PASSWORD=<password>` (requiere credenciales de AWS con permiso sobre el User Pool), y pegar el `IdToken` de la respuesta en la variable correspondiente.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://3exbh6sz27.execute-api.eu-west-1.amazonaws.com/dev"
+    },
+    {
+      "key": "token_guarderia",
+      "value": "PENDIENTE: IdToken de un usuario del grupo GUARDERIA aprobado"
+    },
+    {
+      "key": "token_guarderia_otra",
+      "value": "PENDIENTE: IdToken de otra guardería, para probar que no puede publicar en nombre de la primera (403)"
+    },
+    {
+      "key": "token_cliente",
+      "value": "PENDIENTE: IdToken de un usuario del grupo CLIENTE"
+    },
+    {
+      "key": "token_admin",
+      "value": "PENDIENTE: IdToken de un usuario del grupo ADMIN"
+    },
+    {
+      "key": "guarderia_id",
+      "value": "PENDIENTE: sub (UUID) de la guardería dueña de token_guarderia"
+    },
+    {
+      "key": "animal_id",
+      "value": "PENDIENTE: id devuelto al crear un animal, o uno existente de GET /animales"
+    },
+    {
+      "key": "fecha_solicitud",
+      "value": "PENDIENTE: campo 'fecha' de la solicitud a aceptar/rechazar, tal cual la devuelve la API"
+    }
+  ],
+  "item": [
+    {
+      "name": "Público",
+      "item": [
+        {
+          "name": "Listar animales (disponibles por defecto)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/animales",
+              "host": ["{{base_url}}"],
+              "path": ["animales"],
+              "query": [
+                {"key": "estado", "value": "disponible", "disabled": true},
+                {"key": "tipo", "value": "gato", "disabled": true},
+                {"key": "edad", "value": "adulto", "disabled": true}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Ficha de animal",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/animales/{{animal_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["animales", "{{animal_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Ficha de animal - no existe (404)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/animales/no-existe",
+              "host": ["{{base_url}}"],
+              "path": ["animales", "no-existe"]
+            }
+          }
+        },
+        {
+          "name": "Listar guarderías aprobadas",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/guarderias",
+              "host": ["{{base_url}}"],
+              "path": ["guarderias"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Solicitudes (anónimas)",
+      "item": [
+        {
+          "name": "Crear solicitud (camino feliz)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"animalId\": \"{{animal_id}}\",\n  \"nombre\": \"Laura Prueba\",\n  \"email\": \"laura@ejemplo.com\",\n  \"telefono\": \"699000111\",\n  \"mensaje\": \"Quiero adoptar.\"\n}"
+            },
+            "url": {"raw": "{{base_url}}/solicitudes", "host": ["{{base_url}}"], "path": ["solicitudes"]}
+          }
+        },
+        {
+          "name": "Crear solicitud - animal inexistente (404)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"animalId\": \"no-existe\",\n  \"nombre\": \"Laura\",\n  \"email\": \"laura@ejemplo.com\",\n  \"telefono\": \"699000111\",\n  \"mensaje\": \"Hola\"\n}"
+            },
+            "url": {"raw": "{{base_url}}/solicitudes", "host": ["{{base_url}}"], "path": ["solicitudes"]}
+          }
+        },
+        {
+          "name": "Crear solicitud - campos faltantes (422)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"animalId\": \"{{animal_id}}\"\n}"},
+            "url": {"raw": "{{base_url}}/solicitudes", "host": ["{{base_url}}"], "path": ["solicitudes"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cliente",
+      "item": [
+        {
+          "name": "Obtener perfil",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_cliente}}"}],
+            "url": {"raw": "{{base_url}}/cliente/perfil", "host": ["{{base_url}}"], "path": ["cliente", "perfil"]}
+          }
+        },
+        {
+          "name": "Actualizar perfil",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_cliente}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Cliente Prueba\",\n  \"telefono\": \"611222333\",\n  \"descripcionSituacion\": \"Piso con jardin, sin otras mascotas.\"\n}"
+            },
+            "url": {"raw": "{{base_url}}/cliente/perfil", "host": ["{{base_url}}"], "path": ["cliente", "perfil"]}
+          }
+        },
+        {
+          "name": "Historial de solicitudes",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_cliente}}"}],
+            "url": {"raw": "{{base_url}}/cliente/solicitudes", "host": ["{{base_url}}"], "path": ["cliente", "solicitudes"]}
+          }
+        },
+        {
+          "name": "Crear solicitud con sesión",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_cliente}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"animalId\": \"{{animal_id}}\",\n  \"mensaje\": \"Me interesa.\"\n}"},
+            "url": {"raw": "{{base_url}}/cliente/solicitudes", "host": ["{{base_url}}"], "path": ["cliente", "solicitudes"]}
+          }
+        },
+        {
+          "name": "Sin token (401)",
+          "request": {
+            "method": "GET",
+            "url": {"raw": "{{base_url}}/cliente/perfil", "host": ["{{base_url}}"], "path": ["cliente", "perfil"]}
+          }
+        },
+        {
+          "name": "Borrar cuenta",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_cliente}}"}],
+            "url": {"raw": "{{base_url}}/cliente", "host": ["{{base_url}}"], "path": ["cliente"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Guardería",
+      "item": [
+        {
+          "name": "Crear animal (camino feliz)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_guarderia}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Rocky\",\n  \"tipo\": \"perro\",\n  \"edad\": \"joven\",\n  \"ciudad\": \"Madrid\",\n  \"provincia\": \"Madrid\",\n  \"descripcion\": \"Perro mestizo muy cariñoso.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/guarderias/{{guarderia_id}}/animales",
+              "host": ["{{base_url}}"], "path": ["guarderias", "{{guarderia_id}}", "animales"]
+            }
+          }
+        },
+        {
+          "name": "Crear animal - otra guardería (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_guarderia_otra}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Luna\",\n  \"tipo\": \"gato\",\n  \"edad\": \"adulto\",\n  \"ciudad\": \"Madrid\",\n  \"provincia\": \"Madrid\",\n  \"descripcion\": \"Gata tranquila.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/guarderias/{{guarderia_id}}/animales",
+              "host": ["{{base_url}}"], "path": ["guarderias", "{{guarderia_id}}", "animales"]
+            }
+          }
+        },
+        {
+          "name": "Crear animal - sin token (401)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"nombre\": \"Toby\",\n  \"tipo\": \"perro\",\n  \"edad\": \"cachorro\",\n  \"ciudad\": \"Sevilla\",\n  \"provincia\": \"Sevilla\",\n  \"descripcion\": \"x\"\n}"},
+            "url": {
+              "raw": "{{base_url}}/guarderias/{{guarderia_id}}/animales",
+              "host": ["{{base_url}}"], "path": ["guarderias", "{{guarderia_id}}", "animales"]
+            }
+          }
+        },
+        {
+          "name": "Crear animal - campos faltantes (422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_guarderia}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"nombre\": \"Toby\"\n}"},
+            "url": {
+              "raw": "{{base_url}}/guarderias/{{guarderia_id}}/animales",
+              "host": ["{{base_url}}"], "path": ["guarderias", "{{guarderia_id}}", "animales"]
+            }
+          }
+        },
+        {
+          "name": "Actualizar perfil propio",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_guarderia}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Huellas Felices\",\n  \"telefono\": \"600111222\",\n  \"ciudad\": \"Madrid\",\n  \"provincia\": \"Madrid\",\n  \"descripcion\": \"Protectora de perros y gatos.\"\n}"
+            },
+            "url": {"raw": "{{base_url}}/guarderia/perfil", "host": ["{{base_url}}"], "path": ["guarderia", "perfil"]}
+          }
+        },
+        {
+          "name": "Editar animal",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_guarderia}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Rocky\",\n  \"tipo\": \"perro\",\n  \"edad\": \"joven\",\n  \"estado\": \"disponible\",\n  \"ciudad\": \"Madrid\",\n  \"provincia\": \"Madrid\",\n  \"descripcion\": \"Actualizado.\",\n  \"fotos\": []\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/guarderias/{{guarderia_id}}/animales/{{animal_id}}",
+              "host": ["{{base_url}}"], "path": ["guarderias", "{{guarderia_id}}", "animales", "{{animal_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Eliminar animal",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_guarderia}}"}],
+            "url": {
+              "raw": "{{base_url}}/guarderias/{{guarderia_id}}/animales/{{animal_id}}",
+              "host": ["{{base_url}}"], "path": ["guarderias", "{{guarderia_id}}", "animales", "{{animal_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Pedir presignada de subida de foto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_guarderia}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contentType\": \"image/jpeg\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/guarderias/{{guarderia_id}}/animales/{{animal_id}}/fotos",
+              "host": ["{{base_url}}"], "path": ["guarderias", "{{guarderia_id}}", "animales", "{{animal_id}}", "fotos"]
+            },
+            "description": "Devuelve {fotoId, url, fields}. El POST multipart/form-data a esa `url` (con `fields` antes que `file`, tamaño 10 KB-8 MB) lo hace el navegador directo a S3, no Postman. El procesado es async: volver a pedir el animal y comprobar si `fotos` ya incluye el `fotoId`."
+          }
+        },
+        {
+          "name": "Pedir presignada - ya tiene 5 fotos (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_guarderia}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"contentType\": \"image/jpeg\"\n}"},
+            "url": {
+              "raw": "{{base_url}}/guarderias/{{guarderia_id}}/animales/{{animal_id}}/fotos",
+              "host": ["{{base_url}}"], "path": ["guarderias", "{{guarderia_id}}", "animales", "{{animal_id}}", "fotos"]
+            },
+            "description": "Solo da 409 si el animal de {{animal_id}} ya tiene 5 fotos subidas de antes."
+          }
+        },
+        {
+          "name": "Listar solicitudes recibidas",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_guarderia}}"}],
+            "url": {
+              "raw": "{{base_url}}/guarderias/{{guarderia_id}}/solicitudes",
+              "host": ["{{base_url}}"], "path": ["guarderias", "{{guarderia_id}}", "solicitudes"]
+            }
+          }
+        },
+        {
+          "name": "Aceptar solicitud",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_guarderia}}"}],
+            "url": {
+              "raw": "{{base_url}}/guarderias/{{guarderia_id}}/solicitudes/{{animal_id}}/aceptar?fecha={{fecha_solicitud}}",
+              "host": ["{{base_url}}"], "path": ["guarderias", "{{guarderia_id}}", "solicitudes", "{{animal_id}}", "aceptar"],
+              "query": [{"key": "fecha", "value": "{{fecha_solicitud}}"}]
+            }
+          }
+        },
+        {
+          "name": "Rechazar solicitud",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_guarderia}}"}],
+            "url": {
+              "raw": "{{base_url}}/guarderias/{{guarderia_id}}/solicitudes/{{animal_id}}/rechazar?fecha={{fecha_solicitud}}",
+              "host": ["{{base_url}}"], "path": ["guarderias", "{{guarderia_id}}", "solicitudes", "{{animal_id}}", "rechazar"],
+              "query": [{"key": "fecha", "value": "{{fecha_solicitud}}"}]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Listar guarderías pendientes",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_admin}}"}],
+            "url": {"raw": "{{base_url}}/admin/guarderias/pendientes", "host": ["{{base_url}}"], "path": ["admin", "guarderias", "pendientes"]}
+          }
+        },
+        {
+          "name": "Aprobar guardería",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_admin}}"}],
+            "url": {"raw": "{{base_url}}/admin/guarderias/{{guarderia_id}}/aprobar", "host": ["{{base_url}}"], "path": ["admin", "guarderias", "{{guarderia_id}}", "aprobar"]}
+          }
+        },
+        {
+          "name": "Rechazar guardería",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_admin}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"motivo\": \"Documentación incompleta.\"\n}"},
+            "url": {"raw": "{{base_url}}/admin/guarderias/{{guarderia_id}}/rechazar", "host": ["{{base_url}}"], "path": ["admin", "guarderias", "{{guarderia_id}}", "rechazar"]}
+          }
+        },
+        {
+          "name": "Ruta admin con token de otro grupo (403)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_cliente}}"}],
+            "url": {"raw": "{{base_url}}/admin/guarderias/pendientes", "host": ["{{base_url}}"], "path": ["admin", "guarderias", "pendientes"]}
+          }
+        }
+      ]
+    }
+  ]
+}

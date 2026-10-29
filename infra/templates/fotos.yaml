@@ -1,0 +1,167 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Fotos de animales: bucket de originales (destino de las subidas
+  presignadas), bucket de derivadas (miniaturas generadas) y Lambda de
+  thumbnails (Pillow) disparada por el evento de subida. 
+  Depende de dynamodb.yaml (ARN de la tabla catalogo) y 
+  de artefactos.yaml (bucket con el zip que sube build-lambdas.sh). 
+  Nada de api.yaml: es quien importa de aquí (permisos S3 de RolGuarderia), 
+  así que la dependencia inversa crearía un ciclo.
+
+Parameters:
+  Proyecto:
+    Type: String
+    Default: adopcion-mascotas
+
+  Entorno:
+    Type: String
+    AllowedValues: [dev, prod]
+
+  CodigoS3Bucket:
+    Type: String
+    Description: Bucket con el zip de la Lambda de thumbnails.
+
+  CodigoS3KeyThumbnails:
+    Type: String
+    Description: Key del zip dentro de CodigoS3Bucket.
+
+Resources:
+  # ---------------------------------------------------------------------
+  # Lambda primero: el bucket de originales necesita el permiso de
+  # invocación (más abajo) antes de poder activar su notificación, y ese
+  # permiso necesita que la función ya exista.
+  # ---------------------------------------------------------------------
+  RolThumbnails:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Proyecto}-${Entorno}-thumbnails-rol"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: procesar-fotos
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [s3:GetObject, s3:DeleteObject]
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${Proyecto}-${Entorno}-fotos-originales-${AWS::AccountId}/animales/*"
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${Proyecto}-${Entorno}-fotos-derivadas-${AWS::AccountId}/animales/*"
+              - Effect: Allow
+                Action: dynamodb:UpdateItem
+                Resource: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-arn" }
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  FnThumbnails:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Proyecto}-${Entorno}-thumbnails"
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 1536
+      Timeout: 30
+      Handler: handler.lambda_handler
+      Role: !GetAtt RolThumbnails.Arn
+      Code: { S3Bucket: !Ref CodigoS3Bucket, S3Key: !Ref CodigoS3KeyThumbnails }
+      Environment:
+        Variables:
+          BUCKET_FOTOS_DERIVADAS: !Sub "${Proyecto}-${Entorno}-fotos-derivadas-${AWS::AccountId}"
+          TABLA_CATALOGO: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-nombre" }
+      # Sin ReservedConcurrentExecutions: mismo límite de cuenta de 10
+      # ejecuciones concurrentes ya documentado en api.yaml y catalogo.yaml.
+
+  LogGroupThumbnails:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${FnThumbnails}"
+      RetentionInDays: 30
+
+  # El SourceArn se construye con !Sub, no con !GetAtt sobre el bucket, a
+  # propósito: así este permiso solo depende de FnThumbnails, nunca del
+  # bucket, y el bucket puede depender de este permiso (más abajo) sin
+  # formar un ciclo. Es el mismo patrón que usa la documentación oficial de
+  # AWS para notificaciones S3 > Lambda dentro de un único stack.
+  PermisoS3InvocaThumbnails:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref FnThumbnails
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref "AWS::AccountId"
+      SourceArn: !Sub "arn:${AWS::Partition}:s3:::${Proyecto}-${Entorno}-fotos-originales-${AWS::AccountId}"
+
+  # ---------------------------------------------------------------------
+  # Buckets. Privados los dos: sin CloudFront/OAC todavía (fase pendiente,
+  # igual que el bucket del catálogo), así que ninguno se publica en una URL.
+  # ---------------------------------------------------------------------
+  BucketFotosOriginales:
+    Type: AWS::S3::Bucket
+    DependsOn: PermisoS3InvocaThumbnails
+    Properties:
+      BucketName: !Sub "${Proyecto}-${Entorno}-fotos-originales-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: abortar-multiparte-incompletas
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: animales/
+            Function: !GetAtt FnThumbnails.Arn
+
+  BucketFotosDerivadas:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${Proyecto}-${Entorno}-fotos-derivadas-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: abortar-multiparte-incompletas
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+
+Outputs:
+  BucketFotosOriginalesNombre:
+    Value: !Ref BucketFotosOriginales
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-bucket-fotos-originales-nombre"
+  BucketFotosOriginalesArn:
+    Value: !GetAtt BucketFotosOriginales.Arn
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-bucket-fotos-originales-arn"
+  BucketFotosDerivadasNombre:
+    Value: !Ref BucketFotosDerivadas
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-bucket-fotos-derivadas-nombre"
+  BucketFotosDerivadasArn:
+    Value: !GetAtt BucketFotosDerivadas.Arn
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-bucket-fotos-derivadas-arn"

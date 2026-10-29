@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Gestión de Identidades con Amazon Cognito (RefugioCloud).
+
+Resources:
+  RefugioUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: RefugioUsers
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+
+  RefugioUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: RefugioAppClient
+      UserPoolId: !Ref RefugioUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+
+  GrupoAdoptantes:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Adoptante
+      Description: "Usuarios que buscan adoptar un animal"
+      Precedence: 2
+      UserPoolId: !Ref RefugioUserPool
+
+  GrupoProtectoras:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Protectora
+      Description: "Administradores del refugio con privilegios de escritura"
+      Precedence: 1
+      UserPoolId: !Ref RefugioUserPool
+
+Outputs:
+  Region:
+    Description: Región donde se ha desplegado Cognito
+    Value: !Ref AWS::Region
+  UserPoolId:
+    Description: ID del Directorio de Usuarios
+    Value: !Ref RefugioUserPool
+  UserPoolClientId:
+    Description: ID del Cliente de Aplicación
+    Value: !Ref RefugioUserPoolClient

@@ -1,0 +1,203 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Cognito User Pool: grupos ADMIN/GUARDERIA/CLIENTE, tres App Clients (uno por
+  camino de registro/login) y el trigger de Post Confirmation que asigna
+  grupo y crea el ítem correspondiente en DynamoDB. Depende de dynamodb.yaml
+  (importa los nombres y ARN de las tablas).
+
+Parameters:
+  Proyecto:
+    Type: String
+    Default: adopcion-mascotas
+
+  Entorno:
+    Type: String
+    AllowedValues: [dev, prod]
+
+  CodigoS3Bucket:
+    Type: String
+    Description: Bucket con el zip del Lambda de Post Confirmation (backend/event_lambdas/post_confirmation).
+
+  CodigoS3KeyPostConfirmation:
+    Type: String
+    Description: Key del zip dentro de CodigoS3Bucket.
+
+Resources:
+  # --- Permisos del trigger de Post Confirmation ---
+  RolPostConfirmation:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Proyecto}-${Entorno}-post-confirmation-rol"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: escritura-tablas
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: dynamodb:PutItem
+                Resource:
+                  - !ImportValue
+                    Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-arn"
+                  - !ImportValue
+                    Fn::Sub: "${Proyecto}-${Entorno}-tabla-solicitudes-arn"
+              # No se puede usar !GetAtt UserPool.Arn aquí: crearía un ciclo,
+              # porque el propio User Pool depende de esta función a través de
+              # LambdaConfig.PostConfirmation. Se acota por cuenta y región en
+              # su lugar; en esta cuenta solo existe este User Pool.
+              - Effect: Allow
+                Action:
+                  - cognito-idp:AdminAddUserToGroup
+                  - cognito-idp:DescribeUserPoolClient
+                Resource: !Sub "arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  FnPostConfirmation:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Proyecto}-${Entorno}-post-confirmation"
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 256
+      Timeout: 10
+      Handler: handler.lambda_handler
+      Role: !GetAtt RolPostConfirmation.Arn
+      Code:
+        S3Bucket: !Ref CodigoS3Bucket
+        S3Key: !Ref CodigoS3KeyPostConfirmation
+      Environment:
+        Variables:
+          TABLA_CATALOGO: !ImportValue
+            Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-nombre"
+          TABLA_SOLICITUDES: !ImportValue
+            Fn::Sub: "${Proyecto}-${Entorno}-tabla-solicitudes-nombre"
+          # No lleva los IDs de App Client como variables de entorno: un !Ref
+          # a UserPoolClientCliente/Guarderia aquí crearía un ciclo (esos
+          # clientes dependen del User Pool, que depende de esta función). En
+          # su lugar, el handler llama a DescribeUserPoolClient en tiempo de
+          # ejecución con el clientId que trae el propio evento y compara
+          # ClientName. Ver backend/event_lambdas/post_confirmation/handler.py.
+
+  LogGroupPostConfirmation:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${FnPostConfirmation}"
+      RetentionInDays: 30
+
+  PermisoInvocacionCognito:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref FnPostConfirmation
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+
+  # --- User Pool ---
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      UserPoolName: !Sub "${Proyecto}-${Entorno}-usuarios"
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      MfaConfiguration: OPTIONAL
+      EnabledMfas: [SOFTWARE_TOKEN_MFA]
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+      Schema:
+        - Name: email
+          Required: true
+          Mutable: true
+      LambdaConfig:
+        PostConfirmation: !GetAtt FnPostConfirmation.Arn
+
+  GrupoAdmin:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      UserPoolId: !Ref UserPool
+      GroupName: ADMIN
+      Description: Propietario del sitio. Se asigna manualmente, nunca por auto-registro.
+
+  GrupoGuarderia:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      UserPoolId: !Ref UserPool
+      GroupName: GUARDERIA
+      Description: Asignado por el trigger de Post Confirmation cuando el registro entra por el App Client de guarderías.
+
+  GrupoCliente:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      UserPoolId: !Ref UserPool
+      GroupName: CLIENTE
+      Description: Asignado por el trigger de Post Confirmation cuando el registro entra por el App Client de clientes.
+
+  # Dos App Clients para que el trigger distinga cliente de guardería por
+  # event.callerContext.clientId (que pone Cognito, no el navegador). Un
+  # tercero solo para el login del panel de administración: el ADMIN no se
+  # auto-registra, así que este cliente no dispara nada en el trigger.
+  UserPoolClientCliente:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "${Proyecto}-${Entorno}-cliente"
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows: [ALLOW_USER_SRP_AUTH, ALLOW_REFRESH_TOKEN_AUTH, ALLOW_ADMIN_USER_PASSWORD_AUTH]
+      PreventUserExistenceErrors: ENABLED
+
+  UserPoolClientGuarderia:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "${Proyecto}-${Entorno}-guarderia"
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows: [ALLOW_USER_SRP_AUTH, ALLOW_REFRESH_TOKEN_AUTH, ALLOW_ADMIN_USER_PASSWORD_AUTH]
+      PreventUserExistenceErrors: ENABLED
+
+  UserPoolClientAdmin:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "${Proyecto}-${Entorno}-admin"
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows: [ALLOW_USER_SRP_AUTH, ALLOW_REFRESH_TOKEN_AUTH, ALLOW_ADMIN_USER_PASSWORD_AUTH]
+      PreventUserExistenceErrors: ENABLED
+
+Outputs:
+  UserPoolId:
+    Value: !Ref UserPool
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-user-pool-id"
+  UserPoolArn:
+    Value: !GetAtt UserPool.Arn
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-user-pool-arn"
+  UserPoolIssuer:
+    Value: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}"
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-user-pool-issuer"
+  UserPoolClientIdCliente:
+    Value: !Ref UserPoolClientCliente
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-app-client-cliente"
+  UserPoolClientIdGuarderia:
+    Value: !Ref UserPoolClientGuarderia
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-app-client-guarderia"
+  UserPoolClientIdAdmin:
+    Value: !Ref UserPoolClientAdmin
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-app-client-admin"

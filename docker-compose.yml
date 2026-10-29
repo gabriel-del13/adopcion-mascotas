@@ -1,0 +1,9 @@
+# Test. DynamoDB Local 
+services:
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: adopcion-mascotas-dynamodb-local
+    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
+    working_dir: /home/dynamodblocal
+    ports:
+      - "8000:8000"

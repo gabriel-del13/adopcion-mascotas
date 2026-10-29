@@ -1,0 +1,139 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Catálogo público precalculado: bucket S3 con el JSON del catálogo y su
+  manifiesto, más la Lambda regeneradora disparada por DynamoDB Streams sobre
+  la tabla `catalogo`. Depende de dynamodb.yaml (importa el stream ARN). Ver
+  .docs/Plataforma_de_Adopcion_de_Mascotas.md.
+Parameters:
+  Proyecto:
+    Type: String
+    Default: adopcion-mascotas
+
+  Entorno:
+    Type: String
+    AllowedValues: [dev, prod]
+
+  CodigoS3Bucket:
+    Type: String
+    Description: Bucket con el zip de backend/event_lambdas/regenerador_catalogo.
+
+  CodigoS3KeyRegenerador:
+    Type: String
+    Description: Key del zip dentro de CodigoS3Bucket.
+
+Resources:
+  BucketCatalogo:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${Proyecto}-${Entorno}-catalogo-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      # Privado por ahora: sin CloudFront/OAC todavía (fase pendiente), el
+      # acceso es de operador (aws s3 / get-object), no público. Cuando exista
+      # CloudFront, servirá /data/* con OAC igual que el resto de buckets de
+      # contenido - no hace falta cambiar nada de este stack para eso.
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          # Los catálogos llevan un hash en el nombre y no se sobrescriben: sin
+          # esto crecerían para siempre. El manifiesto (fuera de este prefijo)
+          # no caduca.
+          - Id: expirar-catalogos-antiguos
+            Status: Enabled
+            Prefix: "data/catalogo-"
+            ExpirationInDays: 7
+          - Id: abortar-multiparte-incompletas
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+
+  RolRegeneradorCatalogo:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Proyecto}-${Entorno}-regenerador-catalogo-rol"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: leer-catalogo-y-escribir-s3
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [dynamodb:Query, dynamodb:Scan]
+                Resource:
+                  - !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-arn" }
+                  - !Sub
+                    - "${TablaArn}/index/*"
+                    - TablaArn: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-arn" }
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub "${BucketCatalogo.Arn}/data/*"
+              # Necesario para que el event source mapping de DynamoDB Streams
+              # pueda leer el stream (no es acceso a la tabla en sí).
+              - Effect: Allow
+                Action:
+                  - dynamodb:DescribeStream
+                  - dynamodb:GetRecords
+                  - dynamodb:GetShardIterator
+                  - dynamodb:ListStreams
+                Resource: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-stream-arn" }
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  FnRegeneradorCatalogo:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Proyecto}-${Entorno}-regenerador-catalogo"
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 256
+      Timeout: 30
+      Handler: handler.lambda_handler
+      Role: !GetAtt RolRegeneradorCatalogo.Arn
+      Code:
+        S3Bucket: !Ref CodigoS3Bucket
+        S3Key: !Ref CodigoS3KeyRegenerador
+      Environment:
+        Variables:
+          TABLA_CATALOGO: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-nombre" }
+          BUCKET_CATALOGO: !Ref BucketCatalogo
+      # Sin ReservedConcurrentExecutions: esta cuenta tiene el límite de 10
+      # ejecuciones concurrentes en total y AWS exige dejar al menos 10 sin
+      # reservar (ver la misma nota en api.yaml) — con ese límite no se puede
+      # reservar nada. La mitigación real es que un event source mapping de
+      # DynamoDB Streams ya procesa cada shard en serie por defecto
+      # (ParallelizationFactor implícito de 1): nunca hay dos invocaciones a
+      # la vez desde el mismo shard, aunque no haya concurrencia reservada.
+
+  LogGroupRegeneradorCatalogo:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${FnRegeneradorCatalogo}"
+      RetentionInDays: 30
+
+  MapeoStreamCatalogo:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-stream-arn" }
+      FunctionName: !Ref FnRegeneradorCatalogo
+      StartingPosition: LATEST
+      # Debounce: publicar un animal y subir varias fotos genera varios
+      # eventos y una sola regeneración
+      MaximumBatchingWindowInSeconds: 30
+      BatchSize: 100
+
+Outputs:
+  BucketCatalogoNombre:
+    Value: !Ref BucketCatalogo
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-bucket-catalogo-nombre"

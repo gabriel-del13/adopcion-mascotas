@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Bucket S3 con los zips de las Lambdas (backend/api y
+  backend/event_lambdas/*, incluida thumbnails), que auth.yaml, api.yaml y
+  fotos.yaml referencian por parámetro. Sin esto no hay dónde apuntar
+  CodigoS3Bucket/CodigoS3Key.
+Parameters:
+  Proyecto:
+    Type: String
+    Default: adopcion-mascotas
+
+  Entorno:
+    Type: String
+    AllowedValues: [dev, prod]
+
+Resources:
+  BucketArtefactos:
+    Type: AWS::S3::Bucket
+    Properties:
+      # El nombre de bucket es único a nivel global: se acota con el ID de
+      # cuenta para no chocar con otros proyectos.
+      BucketName: !Sub "${Proyecto}-${Entorno}-artefactos-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: abortar-multiparte-incompletas
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+          - Id: expirar-versiones-antiguas
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+
+Outputs:
+  NombreBucket:
+    Value: !Ref BucketArtefactos
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-bucket-artefactos"

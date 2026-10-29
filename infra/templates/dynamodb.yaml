@@ -1,0 +1,147 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Las dos tablas de datos del proyecto. `catalogo` (datos publicables, con
+  streams) y `solicitudes` (datos personales, con TTL).
+
+Parameters:
+  Proyecto:
+    Type: String
+    Default: adopcion-mascotas
+
+  Entorno:
+    Type: String
+    AllowedValues: [dev, prod]
+
+Resources:
+  TablaCatalogo:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub "${Proyecto}-${Entorno}-catalogo"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: GSI1PK
+          AttributeType: S
+        - AttributeName: GSI1SK
+          AttributeType: S
+        - AttributeName: GSI2PK
+          AttributeType: S
+        - AttributeName: GSI2SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        # Catálogo público: PK = ESTADO#<estado>, SK = TIPO#<tipo>#EDAD#<edad>.
+        - IndexName: GSI-Catalogo
+          KeySchema:
+            - AttributeName: GSI1PK
+              KeyType: HASH
+            - AttributeName: GSI1SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        # El índice es disperso: solo las guarderías con estado "pendiente" llevan GSI2PK/GSI2SK.
+        - IndexName: GSI-Guarderias-Pendientes
+          KeySchema:
+            - AttributeName: GSI2PK
+              KeyType: HASH
+            - AttributeName: GSI2SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+        RecoveryPeriodInDays: 7
+      Tags:
+        - Key: Proyecto
+          Value: !Ref Proyecto
+        - Key: Entorno
+          Value: !Ref Entorno
+
+  TablaSolicitudes:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub "${Proyecto}-${Entorno}-solicitudes"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: GSI1PK
+          AttributeType: S
+        - AttributeName: GSI1SK
+          AttributeType: S
+        - AttributeName: GSI2PK
+          AttributeType: S
+        - AttributeName: GSI2SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        # Historial del cliente, con índice disperso: solo las solicitudes con clienteId aparecen aquí.
+        - IndexName: GSI-Solicitudes-Por-Cliente
+          KeySchema:
+            - AttributeName: GSI1PK
+              KeyType: HASH
+            - AttributeName: GSI1SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        # Bandeja de solicitudes recibidas por una guardería.
+        - IndexName: GSI-Solicitudes-Por-Guarderia
+          KeySchema:
+            - AttributeName: GSI2PK
+              KeyType: HASH
+            - AttributeName: GSI2SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+        RecoveryPeriodInDays: 7
+      Tags:
+        - Key: Proyecto
+          Value: !Ref Proyecto
+        - Key: Entorno
+          Value: !Ref Entorno
+
+Outputs:
+  TablaCatalogoNombre:
+    Value: !Ref TablaCatalogo
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-tabla-catalogo-nombre"
+  TablaCatalogoArn:
+    Value: !GetAtt TablaCatalogo.Arn
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-tabla-catalogo-arn"
+  TablaCatalogoStreamArn:
+    Value: !GetAtt TablaCatalogo.StreamArn
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-tabla-catalogo-stream-arn"
+  TablaSolicitudesNombre:
+    Value: !Ref TablaSolicitudes
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-tabla-solicitudes-nombre"
+  TablaSolicitudesArn:
+    Value: !GetAtt TablaSolicitudes.Arn
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-tabla-solicitudes-arn"

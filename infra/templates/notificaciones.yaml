@@ -1,0 +1,182 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Cola SQS (con DLQ) entre la API y el envío de correo, la Lambda consumidora
+  que envía por SES, y las alarmas operativas asociadas. Depende solo de
+  dynamodb.yaml — nada de api.yaml, a propósito: api.yaml importa la cola de
+  aquí, así que la dependencia en el otro sentido crearía un ciclo entre
+  stacks.
+
+Parameters:
+  Proyecto:
+    Type: String
+    Default: adopcion-mascotas
+
+  Entorno:
+    Type: String
+    AllowedValues: [dev, prod]
+
+  CodigoS3Bucket:
+    Type: String
+    Description: Bucket con el zip de backend/event_lambdas/consumidora_sqs.
+
+  CodigoS3KeyConsumidora:
+    Type: String
+    Description: Key del zip dentro de CodigoS3Bucket.
+
+  EmailAlertas:
+    Type: String
+    Description: Recibe las alarmas operativas (profundidad de la DLQ, intentos de token inválido).
+
+  EmailRemitenteSes:
+    Type: String
+    Description: >
+      Dirección "De:" de los correos de notificación. SES manda un correo de
+      verificación aquí al desplegar: hay que abrirlo y confirmar antes de que
+      el envío funcione.
+
+Resources:
+  # ---------------------------------------------------------------------
+  # Cola + DLQ
+  # ---------------------------------------------------------------------
+  ColaNotificacionesDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${Proyecto}-${Entorno}-notificaciones-dlq"
+      MessageRetentionPeriod: 1209600 # 14 días máximo
+
+  ColaNotificaciones:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${Proyecto}-${Entorno}-notificaciones"
+      VisibilityTimeout: 30 # 3x el timeout de la Lambda consumidora.
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ColaNotificacionesDLQ.Arn
+        maxReceiveCount: 5
+
+  # ---------------------------------------------------------------------
+  # Alertas operativas
+  # ---------------------------------------------------------------------
+  TemaAlertasOperativas:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${Proyecto}-${Entorno}-alertas-operativas"
+
+  SuscripcionAlertasOperativas:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref TemaAlertasOperativas
+      Protocol: email
+      Endpoint: !Ref EmailAlertas
+
+  AlarmaProfundidadDLQ:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Proyecto}-${Entorno}-notificaciones-dlq-profundidad"
+      AlarmDescription: Un mensaje cayó en la DLQ de notificaciones (probablemente un fallo de SES).
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ColaNotificacionesDLQ.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref TemaAlertasOperativas
+
+  # La alarma de "token inválido" no va aquí: depende del log group de
+  # FnDecision, que crea api.yaml, desplegado *después* de este stack (ver
+  # Description). Vive en api.yaml, importando TemaAlertasOperativasArn.
+
+  # ---------------------------------------------------------------------
+  # SES: identidad de remitente. Requiere verificación manual
+  # ---------------------------------------------------------------------
+  IdentidadSesRemitente:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: !Ref EmailRemitenteSes
+
+  # ---------------------------------------------------------------------
+  # Lambda consumidora
+  # ---------------------------------------------------------------------
+  RolConsumidoraNotificaciones:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Proyecto}-${Entorno}-consumidora-notificaciones-rol"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: recibir-y-enviar
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [sqs:ReceiveMessage, sqs:DeleteMessage, sqs:GetQueueAttributes]
+                Resource: !GetAtt ColaNotificaciones.Arn
+              # SES comprueba el permiso IAM sobre TODAS las identidades que
+              # intervienen en el envío, no solo el remitente: si el
+              # destinatario también es una identidad verificada de esta
+              # cuenta, el resource-level check también se aplica sobre él. 
+              # El email de cada guardería es dato de la aplicación, 
+              # no se conoce al desplegar, así que no
+              # se puede acotar a una identidad concreta como con el
+              # remitente — de ahí el comodín, limitado a esta cuenta/región
+              # y a estas dos acciones.
+              - Effect: Allow
+                Action: [ses:SendEmail, ses:SendRawEmail]
+                Resource: !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  FnConsumidoraNotificaciones:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Proyecto}-${Entorno}-consumidora-notificaciones"
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 256
+      Timeout: 10
+      Handler: handler.lambda_handler
+      Role: !GetAtt RolConsumidoraNotificaciones.Arn
+      Code:
+        S3Bucket: !Ref CodigoS3Bucket
+        S3Key: !Ref CodigoS3KeyConsumidora
+      Environment:
+        Variables:
+          EMAIL_REMITENTE: !Ref EmailRemitenteSes
+      # Sin ReservedConcurrentExecutions: mismo límite de cuenta de 10
+      # ejecuciones concurrentes documentado en api.yaml y catalogo.yaml.
+
+  LogGroupConsumidoraNotificaciones:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${FnConsumidoraNotificaciones}"
+      RetentionInDays: 30
+
+  MapeoColaNotificaciones:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt ColaNotificaciones.Arn
+      FunctionName: !Ref FnConsumidoraNotificaciones
+      BatchSize: 5
+
+Outputs:
+  ColaNotificacionesUrl:
+    Value: !Ref ColaNotificaciones
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-cola-notificaciones-url"
+  ColaNotificacionesArn:
+    Value: !GetAtt ColaNotificaciones.Arn
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-cola-notificaciones-arn"
+  TemaAlertasOperativasArn:
+    Value: !Ref TemaAlertasOperativas
+    Export:
+      Name: !Sub "${Proyecto}-${Entorno}-tema-alertas-operativas-arn"

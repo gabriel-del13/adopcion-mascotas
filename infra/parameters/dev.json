@@ -1,7 +1,8 @@
 [
   { "ParameterKey": "Proyecto",            "ParameterValue": "adopcion-mascotas" },
   { "ParameterKey": "Entorno",             "ParameterValue": "dev" },
-  { "ParameterKey": "EmailAlertas",        "ParameterValue": "CAMBIAR@ejemplo.com" },
+  { "ParameterKey": "EmailAlertas",        "ParameterValue": "CORREO@gmail.com" },
+  { "ParameterKey": "EmailRemitenteSes",   "ParameterValue": "CORREO@gmail.com" },
   { "ParameterKey": "PresupuestoMensualUSD", "ParameterValue": "10" },
   { "ParameterKey": "UsarDominioPropio",   "ParameterValue": "false" },
   { "ParameterKey": "DominioRaiz",         "ParameterValue": "" },
