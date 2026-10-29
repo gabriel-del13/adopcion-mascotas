@@ -258,7 +258,14 @@ footer{border-top:1px solid var(--line);padding:2rem 1.5rem;text-align:center;co
         </p>
       </div>
       
-      <div id="fields-register" hidden></div>
+      <div id="fields-register" hidden class="mt-3">
+        <label>¿Cómo quieres registrarte?
+          <select id="tipo-cuenta">
+            <option value="cliente">Busco adoptar (Cliente)</option>
+            <option value="guarderia">Soy una protectora (Guardería)</option>
+          </select>
+        </label>
+      </div>
 
       <!-- Verificación de nueva cuenta -->
       <div id="fields-verify" hidden class="mt-3">
@@ -293,39 +300,83 @@ footer{border-top:1px solid var(--line);padding:2rem 1.5rem;text-align:center;co
     <div class="stat"><strong id="stat-pendientes">0</strong><span>Solicitudes pendientes</span></div>
     <div class="stat"><strong>3</strong><span>Adopciones este mes</span></div>
   </div>
+  <hr>
+  <h3>Publicar un nuevo animal</h3>
+  <div class="auth-box" style="max-width: 100%; margin-bottom: 2rem;">
+    <form id="form-nuevo-animal" onsubmit="return publicarAnimal(event)">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+        <label>Nombre<input type="text" id="ani-nombre" required></label>
+        <label>Especie
+          <select id="ani-tipo">
+            <option value="perro">Perro</option>
+            <option value="gato">Gato</option>
+            <option value="conejo">Conejo</option>
+          </select>
+        </label>
+        <label>Raza<input type="text" id="ani-raza" required></label>
+        <label>Edad
+          <select id="ani-edad">
+            <option value="cachorro">Cachorro</option>
+            <option value="joven">Joven</option>
+            <option value="adulto">Adulto</option>
+            <option value="senior">Senior</option>
+          </select>
+        </label>
+        <label>Sexo<select id="ani-sexo"><option>Macho</option><option>Hembra</option></select></label>
+        <label>Tamaño<select id="ani-tamano"><option>Pequeño</option><option>Mediano</option><option>Grande</option></select></label>
+        <label>Provincia<input type="text" id="ani-provincia" placeholder="Ej: Madrid" required></label>
+        <label>Ciudad<input type="text" id="ani-ciudad" placeholder="Ej: Getafe" required></label>
+      </div>
+      <label class="mt-3">Necesidades especiales<input type="text" id="ani-necesidad" placeholder="Ej: Ninguna necesidad especial"></label>
+      <label class="mt-3">Historia<textarea id="ani-historia" required></textarea></label>
+      <label class="mt-3">Foto principal<input type="file" id="ani-foto" accept="image/*" required></label>
+      
+      <button class="btn btn-primary btn-block mt-3" type="submit" id="btn-publicar">Guardar en la nube</button>
+    </form>
+    <p id="msg-publicar" class="msg" hidden></p>
+  </div>
   <h3>Solicitudes recibidas</h3>
   <table>
     <thead><tr><th>Adoptante</th><th>Animal</th><th>Fecha</th><th>Estado</th><th></th></tr></thead>
     <tbody id="solicitudes-body"></tbody>
+</section>
+
+<section id="view-superadmin" class="view" hidden>
+  <h2>Panel de Super Administrador</h2>
+  <p>Gestión de nuevas protectoras dadas de alta en la plataforma.</p>
+  <h3>Guarderías Pendientes de Aprobación</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>ID de la Guardería (Sub)</th>
+        <th>Acción</th>
+      </tr>
+    </thead>
+    <tbody id="lista-guarderias-pendientes">
+    </tbody>
   </table>
-  <h3>Mensajes y notificaciones</h3>
-  <div id="mensajes-list"></div>
 </section>
 
 </main>
 
-<footer>Huellas Encontradas · prototipo estático del frontend (S3 + CloudFront)</footer>
+<footer>Huellas Encontradas · prototipo estático del frontend</footer>
 
 <script>
-const animals=[
-{id:1,name:'Rocco',type:'perro',icon:'dog',breed:'Mestizo',age:'3 años',sex:'Macho',size:'Grande',status:'Disponible',need:'Ninguna necesidad especial',story:'Rocco llegó al refugio hace ocho meses tras ser encontrado en una carretera. Es tranquilo, obediente y le encanta pasear largo rato. Ya sabe convivir con otros perros.'},
-{id:2,name:'Luna',type:'gato',icon:'cat',breed:'Europeo común',age:'1 año',sex:'Hembra',size:'Pequeña',status:'Urgente',need:'Requiere medicación diaria (FIV+)',story:'Luna es positiva en FIV, lo que no le impide llevar una vida normal en un hogar sin otros gatos sin vacunar. Es cariñosa y busca casa con urgencia porque el refugio está saturado.'},
-{id:3,name:'Coco',type:'conejo',icon:'rabbit',breed:'Enano',age:'8 meses',sex:'Macho',size:'Pequeña',status:'Disponible',need:'Ninguna necesidad especial',story:'Coco es curioso y activo. Necesita espacio para moverse y una dieta rica en fibra. Se lleva bien con niños tranquilos.'},
-{id:4,name:'Nube',type:'perro',icon:'dog',breed:'Galgo',age:'5 años',sex:'Hembra',size:'Grande',status:'En tránsito',need:'Ansiedad por separación',story:'Nube viene de otra protectora con más solicitudes que plazas. Es sensible y necesita una familia que no pase muchas horas fuera de casa al principio.'},
-{id:5,name:'Tigre',type:'gato',icon:'cat',breed:'Naranja común',age:'2 años',sex:'Macho',size:'Mediano',status:'Disponible',need:'Revisión veterinaria cada 6 meses',story:'Tigre es independiente pero busca compañía por las noches. Se adapta bien a pisos y le gusta dormir al sol.'},
-{id:6,name:'Pepa',type:'perro',icon:'dog',breed:'Podenco',age:'6 meses',sex:'Hembra',size:'Mediana',status:'Disponible',need:'En proceso de educación básica',story:'Pepa es cachorra, muy juguetona y está aprendiendo las normas básicas de convivencia. Ideal para una familia con tiempo para seguir su educación.'}
-];
-let solicitudes=[
-{id:1,adoptante:'Marta G.',animal:'Luna',fecha:'12/09/2026',estado:'Pendiente'},
-{id:2,adoptante:'Javier R.',animal:'Rocco',fecha:'15/09/2026',estado:'En revisión'},
-{id:3,adoptante:'Elena P.',animal:'Nube',fecha:'20/09/2026',estado:'Aprobada'},
-{id:4,adoptante:'Sergio M.',animal:'Coco',fecha:'22/09/2026',estado:'Pendiente'}
-];
-const mensajes=[
-{titulo:'Nueva solicitud recibida',detalle:'Marta G. ha solicitado la adopción de Luna.',tiempo:'Hace 2 horas'},
-{titulo:'Documento pendiente',detalle:'Falta el justificante de vivienda de Javier R. para Rocco.',tiempo:'Hace 1 día'},
-{titulo:'Adopción confirmada',detalle:'Elena P. ha completado el proceso de adopción de Nube.',tiempo:'Hace 3 días'}
-];
+const API_URL = 'https://kpj497bnz4.execute-api.us-east-1.amazonaws.com/dev';
+let animals = [];
+
+async function cargarCatalogo() {
+  try {
+    const response = await fetch(`${API_URL}/animales`);
+    if (!response.ok) throw new Error('Fallo en la red');
+    animals = await response.json();
+    renderCatalog();
+  } catch (error) {
+    console.error("Error al cargar el catálogo:", error);
+    document.getElementById('catalog-grid').innerHTML = '<p class="empty">Error al conectar con la base de datos de AWS.</p>';
+  }
+}
+let solicitudes = [];
 
 let activeType='todos', activeStatus='todos', selectedRole='adoptante', authMode='login', currentRole=null;
 
@@ -334,23 +385,31 @@ function showView(id){document.querySelectorAll('.view').forEach(v=>v.hidden=tru
 function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
 
 function cardHTML(a){
-  const cls=a.status==='Urgente'?'st-urgente':a.status==='En tránsito'?'st-transito':'';
+  const cls = a.estado === 'Urgente' ? 'st-urgente' : a.estado === 'En tránsito' ? 'st-transito' : '';
+  
+  const foto = a.fotoUrl 
+    ? `<img src="${a.fotoUrl}" alt="${a.nombre}" style="width:100%; height:100%; object-fit:cover;">` 
+    : `<svg><use href="#icon-camera"/></svg><span>Foto de ${a.nombre}</span>`;
+
   return `<article class="card ${cls}">
-    <div class="card-photo photo-slot"><svg><use href="#icon-camera"/></svg><span>Foto de ${a.name}</span></div>
+    <div class="card-photo photo-slot">${foto}</div>
     <div class="card-body">
-      <p class="card-status">${a.status}</p>
-      <h3>${a.name}</h3>
-      <p class="meta"><svg class="type-icon"><use href="#icon-${a.icon}"/></svg>${a.breed}, ${a.age}, ${a.sex}</p>
-      <span class="tag">${cap(a.type)}</span>
-      ${a.need!=='Ninguna necesidad especial'?`<span class="tag">${a.need}</span>`:''}
-      <button class="btn btn-outline btn-block" onclick="openDetail(${a.id})">Ver ficha completa</button>
+      <p class="card-status">${a.estado || 'Disponible'}</p>
+      <h3>${a.nombre}</h3>
+      <p class="meta"><svg class="type-icon"><use href="#icon-${a.icon}"/></svg>${a.raza}, ${a.edad}, ${a.sexo}</p>
+      <span class="tag">${cap(a.tipo)}</span>
+      ${a.necesidades && a.necesidades !== 'Ninguna' ? `<span class="tag">${a.necesidades}</span>` : ''}
+      <button class="btn btn-outline btn-block" onclick="openDetail('${a.id}')">Ver ficha completa</button>
     </div>
   </article>`;
 }
 function renderCatalog(){
-  const grid=document.getElementById('catalog-grid');
-  const filtered=animals.filter(a=>(activeType==='todos'||a.type===activeType)&&(activeStatus==='todos'||a.status===activeStatus));
-  grid.innerHTML=filtered.map(cardHTML).join('')||'<p class="empty">No hay animales con estos filtros. Prueba a quitar alguno.</p>';
+  const grid = document.getElementById('catalog-grid');
+  const filtered = animals.filter(a => 
+    (activeType === 'todos' || a.tipo === activeType) && 
+    (activeStatus === 'todos' || a.estado === activeStatus)
+  );
+  grid.innerHTML = filtered.map(cardHTML).join('') || '<p class="empty">No hay animales con estos filtros. Prueba a quitar alguno.</p>';
 }
 document.getElementById('filter-type').addEventListener('click',e=>{
   if(!e.target.matches('.chip'))return;
@@ -364,55 +423,95 @@ document.getElementById('filter-status').addEventListener('click',e=>{
 });
 
 function openDetail(id){
-  const a=animals.find(x=>x.id===id);
+  const a = animals.find(x => String(x.id) === String(id));
+  if (!a) return;
+
+  const foto = a.fotoUrl 
+    ? `<img src="${a.fotoUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:10px;">` 
+    : `<svg><use href="#icon-camera"/></svg><span>Foto principal de ${a.nombre}</span>`;
+
   document.getElementById('detail-content').innerHTML=`
-    <div class="detail-photo photo-slot"><svg><use href="#icon-camera"/></svg><span>Foto principal de ${a.name}</span></div>
-    <div class="gallery">
-      <div class="photo-slot"><svg><use href="#icon-camera"/></svg><span>Foto 2</span></div>
-      <div class="photo-slot"><svg><use href="#icon-camera"/></svg><span>Foto 3</span></div>
-      <div class="photo-slot"><svg><use href="#icon-camera"/></svg><span>Foto 4</span></div>
-      <div class="photo-slot"><svg><use href="#icon-camera"/></svg><span>Foto 5</span></div>
-    </div>
+    <div class="detail-photo photo-slot">${foto}</div>
     <div class="detail-head">
       <svg class="detail-icon"><use href="#icon-${a.icon}"/></svg>
       <div>
-        <p class="card-status">${a.status}</p>
-        <h1>${a.name}</h1>
-        <p class="meta">${a.breed}, ${a.age}, ${a.sex}, tamaño ${a.size.toLowerCase()}</p>
+        <p class="card-status">${a.estado || 'Disponible'}</p>
+        <h1>${a.nombre}</h1>
+        <p class="meta">${a.raza}, ${a.edad}, ${a.sexo}, tamaño ${a.tamano ? a.tamano.toLowerCase() : ''}</p>
+        <p class="meta" style="color: var(--rust);">📍 ${a.ciudad}, ${a.provincia}</p>
       </div>
     </div>
-    <p class="story">${a.story}</p>
-    <div class="need-box"><strong>Necesidades:</strong> ${a.need}</div>
+    <p class="story">${a.descripcion}</p>
+    <div class="need-box"><strong>Necesidades:</strong> ${a.necesidades}</div>
     <hr>
-    <h2>Solicitar la adopción de ${a.name}</h2>
-    <form onsubmit="return handleSolicitud(event)">
-      <label>Tu nombre<input type="text" required></label>
-      <label>Email<input type="email" required></label>
-      <label>Teléfono<input type="tel"></label>
-      <label>Tipo de vivienda
-        <select><option>Piso sin exterior</option><option>Piso con terraza</option><option>Casa con jardín</option></select>
-      </label>
-      <label>¿Tienes otros animales en casa?
-        <select><option>No</option><option>Sí</option></select>
-      </label>
-      <label>Experiencia previa con esta especie
-        <select><option>No</option><option>Sí</option></select>
-      </label>
-      <label>Disponibilidad diaria
-        <select><option>Menos de 4 horas</option><option>Entre 4 y 8 horas</option><option>Todo el día</option></select>
-      </label>
-      <label>¿Por qué creéis que encajáis?<textarea></textarea></label>
-      <button class="btn btn-primary" type="submit">Enviar solicitud de adopción</button>
+    <h2>Solicitar la adopción de ${a.nombre}</h2>
+    <form id="form-solicitud" onsubmit="return handleSolicitud(event, '${a.id}')">
+      <label>Tu nombre<input type="text" id="sol-nombre" required></label>
+      <label>Email<input type="email" id="sol-email" required></label>
+      <label>Teléfono<input type="tel" id="sol-tel" required></label>
+      <label>¿Por qué creéis que encajáis?<textarea id="sol-motivo" required></textarea></label>
+      <button class="btn btn-primary" type="submit" id="btn-enviar-solicitud">Enviar solicitud de adopción</button>
     </form>
     <p id="solicitud-msg" class="msg" hidden></p>
   `;
   showView('detail');
 }
-function handleSolicitud(e){
+async function handleSolicitud(e, animalId) {
   e.preventDefault();
-  const m=document.getElementById('solicitud-msg');
-  m.textContent='Solicitud enviada. La protectora revisará tu cuestionario y te contactará por email.';
-  m.hidden=false;e.target.reset();return false;
+  
+  const btn = document.getElementById('btn-enviar-solicitud');
+  const msg = document.getElementById('solicitud-msg');
+  
+  btn.textContent = 'Enviando a la protectora...';
+  btn.disabled = true;
+
+  try {
+    const token = localStorage.getItem('jwtToken');
+    
+    const rutaEndpoint = token ? '/cliente/solicitudes' : '/publico/solicitudes';
+    
+    const nuevaSolicitud = {
+      animalId: String(animalId), 
+      nombre_adoptante: document.getElementById('sol-nombre').value,
+      email_adoptante: document.getElementById('sol-email').value,
+      telefono: document.getElementById('sol-tel').value,
+      mensaje: document.getElementById('sol-motivo').value 
+    };
+
+    console.log("Enviando JSON:", JSON.stringify(nuevaSolicitud));
+
+    const response = await fetch(`${API_URL}${rutaEndpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }) 
+      },
+      body: JSON.stringify(nuevaSolicitud)
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        console.error("Detalle del error devuelto por la API:", errorData);
+        throw new Error(`Error ${response.status}`);
+    }
+
+
+    msg.textContent = '¡Solicitud enviada con éxito! La protectora revisará tu cuestionario y te contactará.';
+    msg.style.color = "var(--pine)";
+    msg.hidden = false;
+    document.getElementById('form-solicitud').reset();
+
+  } catch (error) {
+    console.error("Fallo al enviar la solicitud:", error);
+    msg.textContent = 'Hubo un error al enviar tu solicitud (Posible error 422). Revisa la consola (F12) para ver los detalles exactos del fallo de la API.';
+    msg.style.color = "var(--rust)";
+    msg.hidden = false;
+  } finally {
+    btn.textContent = 'Enviar solicitud de adopción';
+    btn.disabled = false;
+  }
+  
+  return false;
 }
 
 function showAuth(role){selectedRole=role;setRole(role);showView('auth');}
@@ -423,16 +522,54 @@ function setRole(role){
   updateAuthFields();
 }
 
-function renderAdmin(){
-  document.getElementById('stat-animales').textContent=animals.length;
-  document.getElementById('stat-pendientes').textContent=solicitudes.filter(s=>s.estado==='Pendiente').length;
-  document.getElementById('solicitudes-body').innerHTML=solicitudes.map(rowHTML).join('');
-  document.getElementById('mensajes-list').innerHTML=mensajes.map(m=>`<div class="msg-item"><strong>${m.titulo}</strong><span class="msg-time">${m.tiempo}</span><p>${m.detalle}</p></div>`).join('');
+function renderAdmin() {
+  document.getElementById('stat-animales').textContent = animals.length;
+  
+  const numPendientes = solicitudes.filter(s => 
+    s.estado && s.estado.toUpperCase() === 'PENDIENTE'
+  ).length;
+  document.getElementById('stat-pendientes').textContent = numPendientes;
+
+  const tbody = document.getElementById('solicitudes-body');
+  
+  if (solicitudes.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--ink-muted); padding: 2rem;">No hay solicitudes recibidas todavía.</td></tr>';
+  } else {
+    tbody.innerHTML = solicitudes.map(rowHTML).join('');
+  }
 }
-function rowHTML(s){
-  const cls=s.estado==='Pendiente'?'badge-pendiente':s.estado==='En revisión'?'badge-revision':'badge-aprobada';
-  const next=s.estado==='Aprobada'?'':`<button class="btn-small" onclick="advanceEstado(${s.id})">Avanzar estado</button>`;
-  return `<tr><td>${s.adoptante}</td><td>${s.animal}</td><td>${s.fecha}</td><td><span class="badge ${cls}">${s.estado}</span></td><td>${next}</td></tr>`;
+function rowHTML(s) {
+  const estadoOriginal = s.estado || 'PENDIENTE';
+  const estadoNormalizado = cap(estadoOriginal.toLowerCase());
+
+  let cls = 'badge-pendiente';
+  if (estadoNormalizado === 'En revisión' || estadoNormalizado === 'En_revision') cls = 'badge-revision';
+  if (estadoNormalizado === 'Aprobada' || estadoNormalizado === 'Aprobado') cls = 'badge-aprobada';
+
+  const next = (estadoNormalizado.includes('Aprobada') || estadoNormalizado.includes('Aprobado')) 
+    ? '' 
+    : `<button class="btn-small" onclick="advanceEstado('${s.id}')">Avanzar estado</button>`;
+
+  const nombreAdoptante = s.nombre_adoptante || s.adoptante_email || s.adoptante || 'Anónimo';
+  const nombreAnimal = s.nombre_animal || s.animalId || s.animal || 'Animal';
+  
+  let fechaFmt = 'Reciente';
+  if (s.fecha_creacion || s.fecha) {
+    const fechaRaw = s.fecha_creacion || s.fecha;
+    if (fechaRaw.includes('T')) {
+      fechaFmt = new Date(fechaRaw).toLocaleDateString('es-ES');
+    } else {
+      fechaFmt = fechaRaw;
+    }
+  }
+
+  return `<tr>
+    <td>${nombreAdoptante}</td>
+    <td>${nombreAnimal}</td>
+    <td>${fechaFmt}</td>
+    <td><span class="badge ${cls}">${estadoNormalizado}</span></td>
+    <td>${next}</td>
+  </tr>`;
 }
 function advanceEstado(id){
   const s=solicitudes.find(x=>x.id===id);
@@ -443,21 +580,22 @@ function advanceEstado(id){
 
 // --- CONFIGURACIÓN DE COGNITO ---
 const poolData = {
-  UserPoolId: 'us-east-1_CPLrtrYlv', 
-  ClientId: '1kscgrad98q7ik6jv125vjvlrd'    
+  UserPoolId: 'us-east-1_HMA54ADVT', 
+  ClientId: '26pou7kbiatna595i9v68t43mb'    
 };
 const userPool = new AmazonCognitoIdentity.CognitoUserPool(poolData);
 let unverifiedCognitoUser = null; 
 
 // --- FUNCIONES AUXILIARES ---
-// Decodifica el Token JWT para ver si el usuario pertenece al grupo "Protectora"
-function isUserProtectora(jwtToken) {
+function getRolUsuario(jwtToken) {
   try {
     const payload = JSON.parse(atob(jwtToken.split('.')[1]));
     const groups = payload['cognito:groups'] || [];
-    return groups.includes('Protectora');
+    if (groups.includes('ADMIN')) return 'ADMIN';
+    if (groups.includes('GUARDERIA')) return 'GUARDERIA';
+    return 'CLIENTE';
   } catch (e) {
-    return false;
+    return 'CLIENTE';
   }
 }
 
@@ -498,22 +636,68 @@ function executeAuth(e) {
 
     cognitoUser.authenticateUser(authenticationDetails, {
       onSuccess: function (result) {
-        const accessToken = result.getAccessToken().getJwtToken();
-        localStorage.setItem('jwtToken', accessToken); 
-        const isProtectora = isUserProtectora(accessToken);
+        const idToken = result.getIdToken().getJwtToken();
+        localStorage.setItem('jwtToken', idToken);
+        
+        const rol = getRolUsuario(idToken);
         document.getElementById('nav-auth').textContent = 'Cerrar sesión';
-        document.getElementById('nav-panel').hidden = !isProtectora; 
-        if (isProtectora) { renderAdmin(); showView('admin'); } 
-        else { msg.textContent = 'Sesión iniciada correctamente.'; msg.hidden = false; showView('home'); }
+        
+        if (rol === 'ADMIN') {
+            document.getElementById('nav-panel').hidden = false;
+            document.getElementById('nav-panel').onclick = () => showView('superadmin');
+            cargarGuarderiasPendientes();
+            showView('superadmin');
+        } else if (rol === 'GUARDERIA') {
+            document.getElementById('nav-panel').hidden = false;
+            document.getElementById('nav-panel').onclick = () => showView('admin');
+            cargarSolicitudes();
+            renderAdmin(); 
+            showView('admin');
+        } else {
+            document.getElementById('nav-panel').hidden = true;
+            msg.textContent = 'Sesión iniciada correctamente.'; 
+            msg.hidden = false; 
+            showView('home'); 
+        }
       },
-      onFailure: function (err) { msg.textContent = err.message || 'Error de inicio de sesión'; msg.hidden = false; }
+      onFailure: function (err) { 
+        msg.textContent = err.message || 'Error de inicio de sesión'; 
+        msg.hidden = false; 
+      },
+      newPasswordRequired: function(userAttributes, requiredAttributes) {
+        const nuevaClave = prompt("Seguridad de AWS: Es tu primer inicio de sesión como Admin. Introduce tu nueva contraseña definitiva (mínimo 8 caracteres, números, etc.):");
+        
+        if (nuevaClave) {
+          delete userAttributes.email_verified; 
+          delete userAttributes.phone_number_verified;
+          delete userAttributes.email;
+          
+          cognitoUser.completeNewPasswordChallenge(nuevaClave, userAttributes, this);
+        } else {
+          msg.textContent = 'Cambio de contraseña cancelado. Es obligatorio para entrar.'; 
+          msg.hidden = false;
+        }
+      }
     });
 
-  } else if (authMode === 'register') {
+} else if (authMode === 'register') {
+    const tipoCuenta = document.getElementById('tipo-cuenta').value;
+    
+    const clientIdActivo = (tipoCuenta === 'guarderia') 
+      ? '6vonv1j2tlc3a7ifvfi0ujt8e6'  // App Client de Guardería
+      : '26pou7kbiatna595i9v68t43mb'; // App Client de Cliente
+
+    const registerPool = new AmazonCognitoIdentity.CognitoUserPool({
+      UserPoolId: 'us-east-1_wqbpR8zqb',
+      ClientId: clientIdActivo
+    });
+
     const attributeList = [new AmazonCognitoIdentity.CognitoUserAttribute({ Name: 'email', Value: email })];
-    userPool.signUp(email, password, attributeList, null, function(err, result) {
+    
+    registerPool.signUp(email, password, attributeList, null, function(err, result) {
       if (err) { msg.textContent = err.message || 'Error al registrar'; msg.hidden = false; return; }
-      unverifiedCognitoUser = result.user;
+      
+      unverifiedCognitoUser = result.user; 
       setMode('verify'); 
     });
 
@@ -567,5 +751,153 @@ function navAuthClick(){
   }
 }
 
-renderCatalog();
+cargarCatalogo();
+// --- PUBLICAR NUEVO ANIMAL (CONEXIÓN AWS) ---
+async function publicarAnimal(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-publicar');
+  const msg = document.getElementById('msg-publicar');
+  btn.textContent = 'Subiendo a AWS...';
+  btn.disabled = true;
+
+  try {
+    const fileInput = document.getElementById('ani-foto');
+    const file = fileInput.files[0];
+    if (!file) throw new Error("Falta la foto");
+
+    const base64String = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result.replace('data:', '').replace(/^.+,/, ''));
+      reader.onerror = error => reject(error);
+    });
+
+    const tipoSel = document.getElementById('ani-tipo').value;
+
+    const nuevoAnimal = {
+      nombre: document.getElementById('ani-nombre').value,
+      tipo: tipoSel,
+      icon: tipoSel === 'conejo' ? 'rabbit' : (tipoSel === 'gato' ? 'cat' : 'dog'),
+      raza: document.getElementById('ani-raza').value,
+      edad: document.getElementById('ani-edad').value,
+      sexo: document.getElementById('ani-sexo').value,
+      tamano: document.getElementById('ani-tamano').value,
+      estado: 'Disponible',
+      necesidades: document.getElementById('ani-necesidad').value || 'Ninguna',
+      descripcion: document.getElementById('ani-historia').value,
+      provincia: document.getElementById('ani-provincia').value, // <--- CAMPO NUEVO
+      ciudad: document.getElementById('ani-ciudad').value, // <--- CAMPO NUEVO
+      fotoNombre: file.name,
+      fotoBase64: base64String
+    };
+
+    const token = localStorage.getItem('jwtToken');
+    
+    // 1. Decodificamos el token de Cognito para sacar tu ID de usuario (sub)
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const guarderiaId = payload.sub; // Si tu compañero usó otro campo, podría ser payload['cognito:username']
+
+    // 2. Inyectamos ese ID dinámicamente en la ruta correcta de la Octava Ruta
+    const response = await fetch(`${API_URL}/guarderias/${guarderiaId}/animales`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}` 
+      },
+      body: JSON.stringify(nuevoAnimal)
+    });
+
+    if (!response.ok) throw new Error(`AWS rechazó la petición con código: ${response.status}`);
+
+    msg.textContent = '¡Animal publicado correctamente en la base de datos!';
+    msg.style.color = "var(--pine)";
+    msg.hidden = false;
+    document.getElementById('form-nuevo-animal').reset();
+    
+    cargarCatalogo(); // Recarga el catálogo para mostrar el nuevo
+
+  } catch (error) {
+    console.error("Fallo completo:", error);
+    msg.textContent = 'Error al publicar. Pulsa F12 (Consola) para ver los detalles.';
+    msg.style.color = "var(--rust)";
+    msg.hidden = false;
+  } finally {
+    btn.textContent = 'Guardar en la nube';
+    btn.disabled = false;
+  }
+  return false;
+}
+
+// --- FUNCIONES DEL SUPER ADMINISTRADOR ---
+async function cargarGuarderiasPendientes() {
+  const token = localStorage.getItem('jwtToken');
+  try {
+    const response = await fetch(`${API_URL}/admin/guarderias/pendientes`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (!response.ok) throw new Error('Fallo al obtener pendientes');
+    const pendientes = await response.json();
+    
+    const tbody = document.getElementById('lista-guarderias-pendientes');
+    
+    if (pendientes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="2">No hay guarderías pendientes.</td></tr>';
+        return;
+    }
+
+    // Suponemos que la API devuelve un array de objetos con el campo "sub"
+    tbody.innerHTML = pendientes.map(g => `
+      <tr>
+        <td style="font-family: monospace;">${g.sub || g.id || JSON.stringify(g)}</td>
+        <td>
+          <button class="btn-small btn-primary" onclick="aprobarGuarderia('${g.sub || g.id}')">Aprobar protectora</button>
+        </td>
+      </tr>
+    `).join('');
+  } catch (error) {
+    console.error("Error cargando guarderías pendientes:", error);
+  }
+}
+
+async function aprobarGuarderia(sub) {
+  const token = localStorage.getItem('jwtToken');
+  try {
+    const response = await fetch(`${API_URL}/admin/guarderias/${sub}/aprobar`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (!response.ok) throw new Error('Fallo al aprobar');
+    
+    alert('¡Protectora aprobada con éxito!');
+    cargarGuarderiasPendientes(); // Recarga la tabla para que desaparezca
+  } catch (error) {
+    console.error("Error al aprobar:", error);
+    alert('Hubo un error al intentar aprobar la guardería.');
+  }
+}
+async function cargarSolicitudes() {
+  const token = localStorage.getItem('jwtToken');
+  if (!token) return;
+  
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const guarderiaId = payload.sub; // Tu ID de protectora
+
+    const response = await fetch(`${API_URL}/guarderias/${guarderiaId}/solicitudes`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (!response.ok) throw new Error('Error al cargar las solicitudes');
+    
+    solicitudes = await response.json();
+    renderAdmin(); // Repintamos la tabla con los datos reales
+  } catch (error) {
+    console.error("Fallo al obtener solicitudes:", error);
+    document.getElementById('solicitudes-body').innerHTML = '<tr><td colspan="5">Error al cargar solicitudes.</td></tr>';
+  }
+}
 </script>

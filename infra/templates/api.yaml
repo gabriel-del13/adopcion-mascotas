@@ -49,31 +49,7 @@ Resources:
   # ---------------------------------------------------------------------
   # Pública de lectura: catálogo y fichas. Sin autenticación, solo lectura.
   # ---------------------------------------------------------------------
-  RolLecturaPublica:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub "${Proyecto}-${Entorno}-lectura-publica-rol"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal: { Service: lambda.amazonaws.com }
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: lectura-catalogo
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action: [dynamodb:GetItem, dynamodb:Query, dynamodb:Scan]
-                Resource:
-                  - !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-arn" }
-                  - !Sub
-                    - "${TablaArn}/index/*"
-                    - TablaArn: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-arn" }
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-
+  
   FnLecturaPublica:
     Type: AWS::Lambda::Function
     Properties:
@@ -83,7 +59,7 @@ Resources:
       MemorySize: 1024
       Timeout: 10
       Handler: app.handlers.lectura_publica.handler
-      Role: !GetAtt RolLecturaPublica.Arn
+      Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
       Code: { S3Bucket: !Ref CodigoS3Bucket, S3Key: !Ref CodigoS3KeyApi }
       Environment:
         Variables:
@@ -108,44 +84,7 @@ Resources:
   # protección de esta ruta es WAF, fase pendiente); solo puede escribir,
   # nunca leer.
   # ---------------------------------------------------------------------
-  RolEscrituraPublica:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub "${Proyecto}-${Entorno}-escritura-publica-rol"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal: { Service: lambda.amazonaws.com }
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: crear-solicitud
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              # Solo PutItem, nunca lectura. La restricción a "solo ítems de
-              # solicitud" no se puede expresar como condición IAM porque la
-              # PK es ANIMAL#<id> (no la identidad de quien llama): la aplica
-              # el código con una ConditionExpression en el propio PutItem
-              - Effect: Allow
-                Action: dynamodb:PutItem
-                Resource: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-solicitudes-arn" }
-              # Scan, no solo GetItem/Query: obtener_animal busca por id sin
-              # conocer la PK real (GUARDERIA#<sub>). Es exactamente la misma
-              # limitación de repositorio_catalogo.py, pendiente
-              - Effect: Allow
-                Action: [dynamodb:GetItem, dynamodb:Query, dynamodb:Scan]
-                Resource:
-                  - !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-arn" }
-              # Encolar el aviso de nueva solicitud (NotificadorSqs). El
-              # mensaje ya lleva todo lo necesario para el correo, así que no
-              # hace falta ningún permiso adicional aquí.
-              - Effect: Allow
-                Action: sqs:SendMessage
-                Resource: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-cola-notificaciones-arn" }
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-
+  
   FnEscrituraPublica:
     Type: AWS::Lambda::Function
     Properties:
@@ -155,7 +94,7 @@ Resources:
       MemorySize: 1024
       Timeout: 10
       Handler: app.handlers.escritura_publica.handler
-      Role: !GetAtt RolEscrituraPublica.Arn
+      Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
       Code: { S3Bucket: !Ref CodigoS3Bucket, S3Key: !Ref CodigoS3KeyApi }
       Environment:
         Variables:
@@ -185,47 +124,7 @@ Resources:
   # ---------------------------------------------------------------------
   # Privada de cliente: perfil e historial. Cognito nativo + grupo CLIENTE
   # ---------------------------------------------------------------------
-  RolCliente:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub "${Proyecto}-${Entorno}-cliente-rol"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal: { Service: lambda.amazonaws.com }
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: perfil-e-historial
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                # DeleteItem hace falta para el borrado de cuenta (perfil +
-                # sus propias solicitudes).
-                Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:Query, dynamodb:DeleteItem]
-                Resource:
-                  - !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-solicitudes-arn" }
-                  - !Sub
-                    - "${TablaArn}/index/*"
-                    - TablaArn: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-solicitudes-arn" }
-              # Scan además de GetItem: crear_solicitud_con_sesion también
-              # llama a obtener_animal (ver nota en RolEscrituraPublica).
-              - Effect: Allow
-                Action: [dynamodb:GetItem, dynamodb:Scan]
-                Resource: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-arn" }
-              # Borrado de cuenta (RGPD, autoservicio): Cognito primero
-              # necesita que las solicitudes y el perfil ya estén borrados.
-              - Effect: Allow
-                Action: cognito-idp:AdminDeleteUser
-                Resource: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-user-pool-arn" }
-              # Encolar el aviso de nueva solicitud (crear_solicitud_con_sesion).
-              - Effect: Allow
-                Action: sqs:SendMessage
-                Resource: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-cola-notificaciones-arn" }
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-
+  
   FnCliente:
     Type: AWS::Lambda::Function
     Properties:
@@ -235,7 +134,7 @@ Resources:
       MemorySize: 1024
       Timeout: 10
       Handler: app.handlers.cliente.handler
-      Role: !GetAtt RolCliente.Arn
+      Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
       Code: { S3Bucket: !Ref CodigoS3Bucket, S3Key: !Ref CodigoS3KeyApi }
       Environment:
         Variables:
@@ -264,59 +163,7 @@ Resources:
   # Privada de guardería: publicar animales, ver solicitudes recibidas.
   # Cognito nativo + grupo GUARDERIA, y la aprobación (estado APROBADA)ss
   # ---------------------------------------------------------------------
-  RolGuarderia:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub "${Proyecto}-${Entorno}-guarderia-rol"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal: { Service: lambda.amazonaws.com }
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: gestion-animales
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                # DeleteItem hace falta para eliminar_animal.
-                Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:Query]
-                Resource:
-                  - !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-arn" }
-                  - !Sub
-                    - "${TablaArn}/index/*"
-                    - TablaArn: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-arn" }
-              - Effect: Allow
-                # GetItem/UpdateItem/DeleteItem hacen falta para
-                # aceptar/rechazar solicitudes recibidas (obtener_solicitud,
-                # aceptar_solicitud, rechazar_solicitud_anonima/redactar_solicitud_cliente).
-                Action: [dynamodb:GetItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:Query]
-                Resource:
-                  - !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-solicitudes-arn" }
-                  - !Sub
-                    - "${TablaArn}/index/*"
-                    - TablaArn: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-solicitudes-arn" }
-              # Presignada de subida (POST, no PUT) + borrado en cascada al
-              # eliminar un animal. Nunca GetObject: la guardería no necesita
-              # leer fotos por aquí, solo escribir/borrar.
-              - Effect: Allow
-                Action: s3:PutObject
-                Resource: !Sub
-                  - "${BucketArn}/animales/*"
-                  - BucketArn: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-bucket-fotos-originales-arn" }
-              - Effect: Allow
-                Action: s3:DeleteObject
-                Resource:
-                  - !Sub
-                    - "${BucketArn}/animales/*"
-                    - BucketArn: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-bucket-fotos-originales-arn" }
-                  - !Sub
-                    - "${BucketArn}/animales/*"
-                    - BucketArn: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-bucket-fotos-derivadas-arn" }
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-
+  
   FnGuarderia:
     Type: AWS::Lambda::Function
     Properties:
@@ -326,7 +173,7 @@ Resources:
       MemorySize: 1024
       Timeout: 10
       Handler: app.handlers.guarderia.handler
-      Role: !GetAtt RolGuarderia.Arn
+      Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
       Code: { S3Bucket: !Ref CodigoS3Bucket, S3Key: !Ref CodigoS3KeyApi }
       Environment:
         Variables:
@@ -352,33 +199,7 @@ Resources:
   # ---------------------------------------------------------------------
   # Administrativa: aprobar/rechazar guarderías. Cognito nativo + grupo ADMIN.
   # ---------------------------------------------------------------------
-  RolAdmin:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub "${Proyecto}-${Entorno}-admin-rol"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal: { Service: lambda.amazonaws.com }
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: aprobar-guarderias
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                # GetItem hace falta porque aprobar/rechazar comprueban antes
-                # que la guardería existe (repositorio_catalogo.obtener_guarderia).
-                Action: [dynamodb:GetItem, dynamodb:Query, dynamodb:UpdateItem]
-                Resource:
-                  - !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-arn" }
-                  - !Sub
-                    - "${TablaArn}/index/*"
-                    - TablaArn: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-arn" }
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-
+  
   FnAdmin:
     Type: AWS::Lambda::Function
     Properties:
@@ -388,7 +209,7 @@ Resources:
       MemorySize: 1024
       Timeout: 10
       Handler: app.handlers.admin.handler
-      Role: !GetAtt RolAdmin.Arn
+      Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
       Code: { S3Bucket: !Ref CodigoS3Bucket, S3Key: !Ref CodigoS3KeyApi }
       Environment:
         Variables:
@@ -415,30 +236,7 @@ Resources:
   # anteriores: nada de Scan/Query, solo las claves exactas de una solicitud
   # y de un animal
   # ---------------------------------------------------------------------
-  RolDecision:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub "${Proyecto}-${Entorno}-decision-rol"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal: { Service: lambda.amazonaws.com }
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: decidir-solicitud
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action: [dynamodb:GetItem, dynamodb:UpdateItem, dynamodb:DeleteItem]
-                Resource: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-solicitudes-arn" }
-              - Effect: Allow
-                Action: dynamodb:UpdateItem
-                Resource: !ImportValue { Fn::Sub: "${Proyecto}-${Entorno}-tabla-catalogo-arn" }
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-
+  
   FnDecision:
     Type: AWS::Lambda::Function
     Properties:
@@ -448,7 +246,7 @@ Resources:
       MemorySize: 1024
       Timeout: 10
       Handler: app.handlers.decision.handler
-      Role: !GetAtt RolDecision.Arn
+      Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
       Code: { S3Bucket: !Ref CodigoS3Bucket, S3Key: !Ref CodigoS3KeyApi }
       Environment:
         Variables:
