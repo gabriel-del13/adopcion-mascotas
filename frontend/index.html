@@ -339,6 +339,7 @@ footer{border-top:1px solid var(--line);padding:2rem 1.5rem;text-align:center;co
   <table>
     <thead><tr><th>Adoptante</th><th>Animal</th><th>Fecha</th><th>Estado</th><th></th></tr></thead>
     <tbody id="solicitudes-body"></tbody>
+  </table>
 </section>
 
 <section id="view-superadmin" class="view" hidden>
@@ -514,12 +515,15 @@ async function handleSolicitud(e, animalId) {
   return false;
 }
 
-function showAuth(role){selectedRole=role;setRole(role);showView('auth');}
-function setRole(role){
-  selectedRole=role;
-  document.getElementById('tab-adoptante').classList.toggle('active',role==='adoptante');
-  document.getElementById('tab-protectora').classList.toggle('active',role==='protectora');
-  updateAuthFields();
+function showAuth(role) {
+  selectedRole = role;
+  if (role === 'protectora') {
+    setMode('register');
+    document.getElementById('tipo-cuenta').value = 'guarderia';
+  } else {
+    setMode('login');
+  }
+  showView('auth');
 }
 
 function renderAdmin() {
@@ -688,7 +692,7 @@ function executeAuth(e) {
       : '26pou7kbiatna595i9v68t43mb'; // App Client de Cliente
 
     const registerPool = new AmazonCognitoIdentity.CognitoUserPool({
-      UserPoolId: 'us-east-1_wqbpR8zqb',
+      UserPoolId: poolData.UserPoolId,
       ClientId: clientIdActivo
     });
 
@@ -901,3 +905,5 @@ async function cargarSolicitudes() {
   }
 }
 </script>
+</body>
+</html>
